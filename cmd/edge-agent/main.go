@@ -302,9 +302,9 @@ func main() {
 			if i < len(blueCallsigns) {
 				callsign = fmt.Sprintf("blue-%s", blueCallsigns[i])
 			}
-			// Stagger coordinates in friendly sector
-			lat := 37.7700 + (float64(i) * 0.006)
-			lon := -122.4300 - (float64(i) * 0.005)
+			// Stagger coordinates in friendly sector (Morocco - West Sector)
+			lat := 31.6200 + (float64(i) * 0.006)
+			lon := -8.0800 - (float64(i) * 0.005)
 			alt := 100.0 + (float64(i) * 15.0)
 			radius := 0.006 + (float64(i) * 0.002)
 			speed := 13.0 + (float64(i) * 1.2)
@@ -318,9 +318,9 @@ func main() {
 		// Spawn Red Fleet (Adversary Forces)
 		for i := 0; i < *redCount; i++ {
 			callsign := fmt.Sprintf("red-%d", i+1)
-			// Stagger coordinates in adversary sector
-			lat := 37.7950 + (float64(i) * 0.006)
-			lon := -122.3950 + (float64(i) * 0.005)
+			// Stagger coordinates in adversary sector (Morocco - East Sector)
+			lat := 31.6450 + (float64(i) * 0.006)
+			lon := -7.9450 + (float64(i) * 0.005)
 			alt := 110.0 + (float64(i) * 15.0)
 			radius := 0.007 + (float64(i) * 0.002)
 			speed := 14.0 + (float64(i) * 1.5)
@@ -331,9 +331,9 @@ func main() {
 			log.Printf("  • Spawned Red Drone:  [%s] Orbit Center: (%.4f, %.4f) Alt: %.0fm", callsign, lat, lon, alt)
 		}
 	} else {
-		// Single Drone Mode
+		// Single Drone Mode (Morocco sector)
 		log.Printf("Launching Single Vehicle: [%s/%s/%s]", *singleType, *singleTeam, *singleID)
-		sim := NewVehicleSim(*singleID, *singleType, *singleTeam, 37.7749, -122.4194, 120.0, 0.008, 14.5)
+		sim := NewVehicleSim(*singleID, *singleType, *singleTeam, 31.6300, -8.0500, 120.0, 0.008, 14.5)
 		wg.Add(1)
 		go runDroneInstance(ctx, sim, bus, *rateHz, *emitTier3Periodic, &wg)
 	}

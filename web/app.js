@@ -34,7 +34,7 @@
   function initMap() {
     if (typeof L !== "undefined") {
       try {
-        state.map = L.map("map").setView([37.7800, -122.4150], 13);
+        state.map = L.map("map").setView([31.6500, -8.0100], 12);
         L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
           attribution: '&copy; CartoDB &copy; OpenStreetMap',
           maxZoom: 19
@@ -66,11 +66,11 @@
     if (!ctx) return;
     const w = ctx.canvas.width;
     const h = ctx.canvas.height;
-    ctx.fillStyle = "#0c1017";
+    ctx.fillStyle = "#191817";
     ctx.fillRect(0, 0, w, h);
 
-    // Draw radar grid lines
-    ctx.strokeStyle = "#172033";
+    // Draw tactical grid lines in warm stone tone
+    ctx.strokeStyle = "#2B2825";
     ctx.lineWidth = 1;
     for (let x = 0; x < w; x += 40) {
       ctx.beginPath();
@@ -85,17 +85,17 @@
       ctx.stroke();
     }
 
-    // Draw vehicles on canvas fallback
+    // Draw vehicles on canvas fallback (Morocco Sector)
     Object.values(state.fleet).forEach(v => {
       const isRed = v.telemetry.team === "red";
-      const x = (w / 2) + ((v.telemetry.coordinates.lon + 122.4150) * 4500);
-      const y = (h / 2) - ((v.telemetry.coordinates.lat - 37.7800) * 4500);
-      ctx.fillStyle = isRed ? "#ef4444" : "#00e5ff";
+      const x = (w / 2) + ((v.telemetry.coordinates.lon - (-8.0100)) * 5000);
+      const y = (h / 2) - ((v.telemetry.coordinates.lat - 31.6500) * 5000);
+      ctx.fillStyle = isRed ? "#D06461" : "#648BAE";
       ctx.beginPath();
-      ctx.arc(x, y, 6, 0, Math.PI * 2);
+      ctx.arc(x, y, 5, 0, Math.PI * 2);
       ctx.fill();
-      ctx.fillStyle = "#f8fafc";
-      ctx.font = "11px monospace";
+      ctx.fillStyle = "#F3EFEA";
+      ctx.font = "11px -apple-system, sans-serif";
       ctx.fillText(v.telemetry.vehicle_id.toUpperCase(), x + 8, y + 4);
     });
   }
@@ -176,12 +176,12 @@
     if (!state.map) return;
 
     const isRed = t.team === "red";
-    const color = isRed ? "#ef4444" : "#00e5ff";
+    const color = isRed ? "#D06461" : "#648BAE";
 
     if (!state.markers[vID]) {
       const icon = L.divIcon({
         className: 'vehicle-marker',
-        html: `<div style="background:${color}; width:13px; height:13px; border-radius:50%; border:2px solid #fff; box-shadow:0 0 10px ${color};"></div>`,
+        html: `<div style="background:${color}; width:12px; height:12px; border-radius:50%; border:2px solid #FAF7F5; box-shadow:0 1px 4px rgba(0,0,0,0.4);"></div>`,
         iconSize: [16, 16],
         iconAnchor: [8, 8]
       });
@@ -189,8 +189,8 @@
       state.polylines[vID] = L.polyline(state.fleet[vID].tracks, {
         color: color,
         weight: 2,
-        opacity: 0.75,
-        dashArray: '4, 4'
+        opacity: 0.65,
+        dashArray: '3, 4'
       }).addTo(state.map);
     } else {
       state.markers[vID].setLatLng(coord);
@@ -198,11 +198,17 @@
     }
 
     state.markers[vID].bindPopup(`
-      <b style="color:${color}; font-size:1.1em;">${t.vehicle_id.toUpperCase()}</b> [${t.team.toUpperCase()} TEAM]<br>
-      <b>State:</b> ${t.state}<br>
-      <b>Altitude:</b> ${t.coordinates.alt_m.toFixed(1)}m | <b>Speed:</b> ${t.velocity.speed_mps.toFixed(1)}m/s<br>
-      <b>Battery:</b> ${t.battery_pct.toFixed(1)}%<br>
-      <b>Coordinates:</b> ${t.coordinates.lat.toFixed(4)}, ${t.coordinates.lon.toFixed(4)}
+      <div style="font-family: -apple-system, sans-serif; color: #2B2825; font-size: 12px; line-height: 1.5; padding: 2px;">
+        <div style="font-weight: 700; color: ${color}; font-size: 13px; margin-bottom: 3px;">
+          ${t.vehicle_id.toUpperCase()} <span style="font-size: 11px; font-weight: 500; color: #888177;">(${t.team.toUpperCase()} TEAM)</span>
+        </div>
+        <div><strong>State:</strong> ${t.state}</div>
+        <div><strong>Altitude:</strong> ${t.coordinates.alt_m.toFixed(1)}m | <strong>Speed:</strong> ${t.velocity.speed_mps.toFixed(1)}m/s</div>
+        <div><strong>Battery:</strong> ${t.battery_pct.toFixed(1)}%</div>
+        <div style="font-family: monospace; font-size: 11px; color: #625C54; margin-top: 3px;">
+          ${t.coordinates.lat.toFixed(4)}, ${t.coordinates.lon.toFixed(4)}
+        </div>
+      </div>
     `);
   }
 
@@ -288,7 +294,7 @@
     }
 
     const isRed = t.team === "red";
-    const teamBadge = isRed ? `<span class="badge badge-danger">RED</span>` : `<span class="badge badge-info">BLUE</span>`;
+    const teamBadge = isRed ? `<span class="badge badge-red">RED</span>` : `<span class="badge badge-blue">BLUE</span>`;
 
     const row = document.createElement("tr");
     row.innerHTML = `

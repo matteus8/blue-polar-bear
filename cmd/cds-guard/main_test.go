@@ -41,7 +41,7 @@ func TestCDSGuard_Pipeline(t *testing.T) {
 		Team:        "blue",
 		State:       "AIRBORNE",
 		BatteryPct:  90.0,
-		Coordinates: schema.Coordinates{Latitude: 37.7749, Longitude: -122.4194, AltitudeM: 100},
+		Coordinates: schema.Coordinates{Latitude: 31.6249, Longitude: -8.0819, AltitudeM: 100},
 	}
 	t3Env, err := schema.NewTelemetryEnvelope(schema.Tier3Critical, "edge-node-01", t3Telem, nil)
 	if err != nil {
@@ -66,7 +66,7 @@ func TestCDSGuard_Pipeline(t *testing.T) {
 		Team:        "blue",
 		State:       "AIRBORNE",
 		BatteryPct:  85.0,
-		Coordinates: schema.Coordinates{Latitude: 37.774929, Longitude: -122.419416, AltitudeM: 125.0},
+		Coordinates: schema.Coordinates{Latitude: 31.624929, Longitude: -8.081916, AltitudeM: 125.0},
 		MissionPayload: map[string]any{
 			"payload_secret": "confidential_sensor_data",
 		},
@@ -93,7 +93,7 @@ func TestCDSGuard_Pipeline(t *testing.T) {
 		t.Errorf("expected classification to be %s, got %s", schema.Tier1Public, sanitizedEnv.Header.Classification)
 	}
 
-	if sanitizedEnv.Telemetry.Coordinates.Latitude != 37.77 {
-		t.Errorf("expected coarsened lat 37.77, got %f", sanitizedEnv.Telemetry.Coordinates.Latitude)
+	if sanitizedEnv.Telemetry.Coordinates.Latitude != 31.62 {
+		t.Errorf("expected coarsened lat 31.62, got %f", sanitizedEnv.Telemetry.Coordinates.Latitude)
 	}
 }

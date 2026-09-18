@@ -56,8 +56,8 @@ func TestSecurityEnvelope_JSONRoundTrip(t *testing.T) {
 		State:       "AIRBORNE",
 		BatteryPct:  98.5,
 		Coordinates: Coordinates{
-			Latitude:  37.7880,
-			Longitude: -122.4450,
+			Latitude:  31.6380,
+			Longitude: -8.0950,
 			AltitudeM: 145.0,
 		},
 		Velocity: Velocity{

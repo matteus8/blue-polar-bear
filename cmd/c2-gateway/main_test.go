@@ -28,7 +28,7 @@ func TestGateway_TelemetryAndFleet(t *testing.T) {
 		Team:        "blue",
 		State:       "AIRBORNE",
 		BatteryPct:  85.0,
-		Coordinates: schema.Coordinates{Latitude: 37.77, Longitude: -122.42, AltitudeM: 100},
+		Coordinates: schema.Coordinates{Latitude: 31.62, Longitude: -8.08, AltitudeM: 100},
 		Sequence:    1,
 	}
 	env, err := schema.NewTelemetryEnvelope(schema.Tier1Public, "cds-sanitized", telem, nil)

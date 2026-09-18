@@ -17,7 +17,7 @@ func TestPolicyEngine_EvaluateAndRedact(t *testing.T) {
 		Team:        "blue",
 		State:       "AIRBORNE",
 		BatteryPct:  95.0,
-		Coordinates: schema.Coordinates{Latitude: 37.774929, Longitude: -122.419416, AltitudeM: 100},
+		Coordinates: schema.Coordinates{Latitude: 31.624929, Longitude: -8.081916, AltitudeM: 100},
 		Sequence:    1,
 	}
 	env1, err := schema.NewTelemetryEnvelope(schema.Tier1Public, "edge-node-01", telem1, nil)
@@ -37,7 +37,7 @@ func TestPolicyEngine_EvaluateAndRedact(t *testing.T) {
 		Team:        "blue",
 		State:       "PATROL",
 		BatteryPct:  88.5,
-		Coordinates: schema.Coordinates{Latitude: 37.774929, Longitude: -122.419416, AltitudeM: 145.0},
+		Coordinates: schema.Coordinates{Latitude: 31.624929, Longitude: -8.081916, AltitudeM: 145.0},
 		MissionPayload: map[string]any{
 			"target_identified": "high_value_asset",
 			"rf_frequency_mhz":  915.5,
@@ -65,11 +65,11 @@ func TestPolicyEngine_EvaluateAndRedact(t *testing.T) {
 	}
 
 	// Check that GPS coordinates were coarsened
-	if sanitized.Telemetry.Coordinates.Latitude != 37.77 {
-		t.Errorf("expected lat 37.77, got %f", sanitized.Telemetry.Coordinates.Latitude)
+	if sanitized.Telemetry.Coordinates.Latitude != 31.62 {
+		t.Errorf("expected lat 31.62, got %f", sanitized.Telemetry.Coordinates.Latitude)
 	}
-	if sanitized.Telemetry.Coordinates.Longitude != -122.42 {
-		t.Errorf("expected lon -122.42, got %f", sanitized.Telemetry.Coordinates.Longitude)
+	if sanitized.Telemetry.Coordinates.Longitude != -8.08 {
+		t.Errorf("expected lon -8.08, got %f", sanitized.Telemetry.Coordinates.Longitude)
 	}
 
 	// Check that mission payload was scrubbed
@@ -89,7 +89,7 @@ func TestPolicyEngine_EvaluateAndRedact(t *testing.T) {
 		Team:        "blue",
 		State:       "AIRBORNE",
 		BatteryPct:  72.0,
-		Coordinates: schema.Coordinates{Latitude: 37.77, Longitude: -122.42, AltitudeM: 200},
+		Coordinates: schema.Coordinates{Latitude: 31.62, Longitude: -8.08, AltitudeM: 200},
 		Sequence:    3,
 	}
 	env3, err := schema.NewTelemetryEnvelope(schema.Tier3Critical, "edge-node-01", telem3, nil)
