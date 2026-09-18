@@ -142,6 +142,12 @@ flowchart TD
 
 ```text
 edgeCompute/
+├── .agents/skills/        # Antigravity project skills & operational runbooks
+│   ├── cds-policy-enforcer/
+│   ├── edge-agent-companion/
+│   ├── tactical-c2-dispatch/
+│   ├── zenoh-mesh-ops/
+│   └── zero-trust-testing/
 ├── cmd/
 │   ├── edge-agent/        # Telemetry generator simulating physical vehicle (Go)
 │   ├── edge-agent-py/     # Alternative Python edge agent (Pi 5 companion)
@@ -156,6 +162,10 @@ edgeCompute/
 │   ├── zenoh-edge.json5   # Pi 5 Zenoh configuration
 │   ├── zenoh-gcs.json5    # GCS Zenoh router configuration (REST plugin: 8000)
 │   └── zenoh-cloud.json5  # Cloud router configuration
+├── deploy/                # Container build specifications
+│   ├── Dockerfile.cds-guard
+│   ├── Dockerfile.c2-gateway
+│   └── Dockerfile.edge-agent
 ├── compose.yml            # Docker Compose orchestration for tactical mesh
 ├── go.mod                 # Go module definitions
 ├── README.md              # Project architecture and security specifications
@@ -164,7 +174,21 @@ edgeCompute/
 
 ---
 
-## 6. Quickstart & Execution Guide
+## 6. Autonomous Agent Skills
+
+This workspace provides specialized Antigravity agent skills under `skills/` and `.agents/skills/`:
+
+| Skill Name | Path | Scope & Responsibilities |
+| :--- | :--- | :--- |
+| **`cds-policy-enforcer`** | [`.agents/skills/cds-policy-enforcer/SKILL.md`](.agents/skills/cds-policy-enforcer/SKILL.md) | Zero-trust CDS rule enforcement, synthetic tier policies, coordinate coarsening, sensitive payload sanitization, and DLQ audit inspection. |
+| **`zenoh-mesh-ops`** | [`.agents/skills/zenoh-mesh-ops/SKILL.md`](.agents/skills/zenoh-mesh-ops/SKILL.md) | Eclipse Zenoh routing, structured topic key conventions (`sec/<tier>/<type>/<team>/<id>/<stream>`), router deployment, and REST/SSE debugging. |
+| **`tactical-c2-dispatch`** | [`.agents/skills/tactical-c2-dispatch/SKILL.md`](.agents/skills/tactical-c2-dispatch/SKILL.md) | Tactical C2 Gateway operations, WebSocket streaming bridge (`/ws/telemetry`), fleet state tracking, and signed flight command dispatch. |
+| **`edge-agent-companion`** | [`.agents/skills/edge-agent-companion/SKILL.md`](.agents/skills/edge-agent-companion/SKILL.md) | Vehicle companion agent workflows for Raspberry Pi 5 (ARM64) and Go simulators, flight physics, battery decay tuning, and C2 listeners. |
+| **`zero-trust-testing`** | [`.agents/skills/zero-trust-testing/SKILL.md`](.agents/skills/zero-trust-testing/SKILL.md) | Automated testing playbooks, Go verification (`go test -v ./...`), Python syntax/unit tests, and containerized smoke test procedures. |
+
+---
+
+## 7. Quickstart & Execution Guide
 
 ### Option A: Local Multi-Container Stack (Docker Compose)
 Launch the Zenoh router, CDS Guard, C2 Gateway, and Edge vehicle simulator:
@@ -203,7 +227,7 @@ Each component includes an in-memory mock bus for standalone testing without a r
 
 ---
 
-## 7. Verification & Automated Testing Playbook
+## 8. Verification & Automated Testing Playbook
 
 Run the complete test suite across all subsystems:
 
@@ -223,6 +247,6 @@ go build -o /dev/null ./cmd/edge-agent
 
 ---
 
-## 8. License
+## 9. License
 
 Licensed under the Apache License, Version 2.0.
