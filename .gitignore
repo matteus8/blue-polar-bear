@@ -17,3 +17,7 @@ build/
 # Local Environment & Secrets
 .env
 *.local
+
+# Logs
+logs/
+*.jsonl

@@ -188,7 +188,6 @@ func (c *RESTClient) Subscribe(ctx context.Context, selector string, handler Mes
 			}
 
 			reader := bufio.NewReader(resp.Body)
-			var currentKey string
 
 			for {
 				select {
@@ -206,16 +205,31 @@ func (c *RESTClient) Subscribe(ctx context.Context, selector string, handler Mes
 				}
 
 				line = strings.TrimSpace(line)
-				if strings.HasPrefix(line, "event:") {
-					currentKey = strings.TrimSpace(strings.TrimPrefix(line, "event:"))
-				} else if strings.HasPrefix(line, "data:") {
+				if strings.HasPrefix(line, "data:") {
 					dataStr := strings.TrimPrefix(line, "data:")
 					dataBytes := []byte(strings.TrimSpace(dataStr))
-					if currentKey == "" {
-						currentKey = selector
+
+					actualKey := selector
+					payloadBytes := dataBytes
+
+					type zenohSSE struct {
+						Key   string          `json:"key"`
+						Value json.RawMessage `json:"value"`
+						Time  string          `json:"time"`
 					}
-					handler(currentKey, dataBytes)
-					currentKey = ""
+
+					var sseEvt zenohSSE
+					if err := json.Unmarshal(dataBytes, &sseEvt); err == nil && sseEvt.Key != "" {
+						actualKey = sseEvt.Key
+						var strVal string
+						if err := json.Unmarshal(sseEvt.Value, &strVal); err == nil {
+							payloadBytes = []byte(strVal)
+						} else if len(sseEvt.Value) > 0 {
+							payloadBytes = sseEvt.Value
+						}
+					}
+
+					handler(actualKey, payloadBytes)
 				}
 			}
 			time.Sleep(1 * time.Second)

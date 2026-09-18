@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"syscall"
@@ -169,8 +170,8 @@ func main() {
 	log.Printf("Subscribing to ingress stream: %s", ingressSelector)
 
 	err = bus.Subscribe(ctx, ingressSelector, func(key string, payload []byte) {
-		// Ignore packets that are already sanitized and exiting CDS to prevent loops
-		if key == "sec/tier1" || filepath.Base(key) == "command" {
+		// Ignore packets that are already sanitized (tier1) or commands to prevent loops
+		if strings.HasPrefix(key, "sec/tier1/") || strings.HasSuffix(key, "/command") {
 			return
 		}
 		guard.ProcessPacket(ctx, key, payload)
