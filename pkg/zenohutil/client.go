@@ -12,6 +12,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/mcamacho/edgeCompute/pkg/schema"
 )
 
 // MessageHandler is invoked when a message matching the subscription selector arrives.

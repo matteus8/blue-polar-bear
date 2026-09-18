@@ -16,7 +16,6 @@ import (
 	"time"
 
 	"github.com/mcamacho/edgeCompute/pkg/policy"
-	"github.com/mcamacho/edgeCompute/pkg/schema"
 	"github.com/mcamacho/edgeCompute/pkg/zenohutil"
 )
 
