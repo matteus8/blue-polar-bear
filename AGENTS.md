@@ -1,6 +1,6 @@
 # AGENTS.md: Autonomous Agent Operating Procedures & Standards
 
-Welcome, AI Agent. You are contributing to **Aegis-Edge**, a distributed, zero-trust Tactical Command & Control (C2) and Telemetry system built with Eclipse Zenoh, Go, and Python.
+Welcome, AI Agent. You are contributing to **Blue Polar Bear**, a distributed, zero-trust Tactical Command & Control (C2) and Telemetry system built with Eclipse Zenoh, Go, and Python.
 
 This document defines the persistent instructions, architectural invariants, code standards, and multi-agent coordination protocols for this repository.
 

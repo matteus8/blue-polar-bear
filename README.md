@@ -1,4 +1,4 @@
-# Aegis-Edge: Tactical Edge-to-Cloud C2 & Telemetry Mesh
+# Blue Polar Bear: Tactical Edge-to-Cloud C2 & Telemetry Mesh
 
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Protocol: Eclipse Zenoh](https://img.shields.io/badge/Protocol-Eclipse_Zenoh_1.1.0-orange.svg)](https://zenoh.io/)
@@ -27,7 +27,7 @@
 
 Modern defense, aerospace, and autonomous robotics operations operate in **DDIL** environments (**D**isconnected, **D**egraded, **I**ntermittent, **L**atent). Traditional monolithic cloud-only architectures fail when satellite links drop or edge nodes enter radio silence.
 
-**Aegis-Edge** solves this by establishing a decentralized, multi-tiered mesh using **Eclipse Zenoh**:
+**Blue Polar Bear** solves this by establishing a decentralized, multi-tiered mesh using **Eclipse Zenoh**:
 1. **Edge Companion Computing:** High-rate flight telemetry and local command handling on embedded hardware.
 2. **Tactical Field GCS & CDS Guard:** A local Ground Control Station that inspects every packet, rejects malformed/tampered payloads into a quarantine audit log, and sanitizes restricted data.
 3. **Beyond-Line-of-Sight (BLOS) Cloud Relay:** Zero-trust relay via Cloudflare (`platformstaq.com`) and cloud edge routing into a browser-based Common Operating Picture (COP).
