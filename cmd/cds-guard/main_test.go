@@ -55,9 +55,9 @@ func TestCDSGuard_Pipeline(t *testing.T) {
 	}
 
 	// 3. Test TIER-2 RESTRICTED -> Redacted and republished
-	var egressReceived []byte
+	egressChan := make(chan []byte, 1)
 	bus.Subscribe(ctx, "sec/tier1/drone/blue/bravo/telemetry", func(key string, payload []byte) {
-		egressReceived = payload
+		egressChan <- payload
 	})
 
 	t2Telem := schema.TelemetryPayload{
@@ -78,10 +78,11 @@ func TestCDSGuard_Pipeline(t *testing.T) {
 	t2Bytes, _ := json.Marshal(t2Env)
 	guard.ProcessPacket(ctx, "sec/tier2/drone/blue/bravo/telemetry", t2Bytes)
 
-	time.Sleep(50 * time.Millisecond)
-
-	if len(egressReceived) == 0 {
-		t.Fatalf("expected sanitized packet to be published to egress topic")
+	var egressReceived []byte
+	select {
+	case egressReceived = <-egressChan:
+	case <-time.After(2 * time.Second):
+		t.Fatalf("timed out waiting for sanitized packet to be published to egress topic")
 	}
 
 	sanitizedEnv, err := zenohutil.ParseJSONEnvelope(egressReceived)

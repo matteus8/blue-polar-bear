@@ -56,7 +56,7 @@ func (h *Hub) run(ctx context.Context) {
 		case <-ctx.Done():
 			h.mu.Lock()
 			for client := range h.clients {
-				client.Close()
+				_ = client.Close()
 				delete(h.clients, client)
 			}
 			h.mu.Unlock()
@@ -72,7 +72,7 @@ func (h *Hub) run(ctx context.Context) {
 			h.mu.Lock()
 			if _, ok := h.clients[client]; ok {
 				delete(h.clients, client)
-				client.Close()
+				_ = client.Close()
 			}
 			h.mu.Unlock()
 			log.Printf("[C2 Hub] Operator dashboard disconnected (Total: %d)", len(h.clients))
@@ -81,7 +81,7 @@ func (h *Hub) run(ctx context.Context) {
 			h.mu.Lock()
 			for client := range h.clients {
 				if err := client.WriteMessage(websocket.TextMessage, message); err != nil {
-					client.Close()
+					_ = client.Close()
 					delete(h.clients, client)
 				}
 			}
@@ -280,8 +280,9 @@ func main() {
 	mux.Handle("/", fs)
 
 	server := &http.Server{
-		Addr:    fmt.Sprintf(":%d", *port),
-		Handler: mux,
+		Addr:              fmt.Sprintf(":%d", *port),
+		Handler:           mux,
+		ReadHeaderTimeout: 5 * time.Second,
 	}
 
 	go func() {

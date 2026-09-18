@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"sync"
 	"time"
 )
@@ -42,7 +43,9 @@ func NewDeadLetterQueue(maxCapacity int, auditFilePath string) (*DeadLetterQueue
 	}
 
 	if auditFilePath != "" {
-		f, err := os.OpenFile(auditFilePath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
+		cleanPath := filepath.Clean(auditFilePath)
+		// #nosec G304 - configured audit log path is cleaned
+		f, err := os.OpenFile(cleanPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
 		if err != nil {
 			return nil, fmt.Errorf("opening audit log file %q: %w", auditFilePath, err)
 		}

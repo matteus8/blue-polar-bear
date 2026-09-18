@@ -192,14 +192,14 @@ func (c *RESTClient) Subscribe(ctx context.Context, selector string, handler Mes
 			for {
 				select {
 				case <-ctx.Done():
-					resp.Body.Close()
+					_ = resp.Body.Close()
 					return
 				default:
 				}
 
 				line, err := reader.ReadString('\n')
 				if err != nil {
-					resp.Body.Close()
+					_ = resp.Body.Close()
 					log.Printf("[Zenoh REST] SSE stream dropped: %v. Reconnecting...", err)
 					break
 				}

@@ -71,9 +71,9 @@ func TestGateway_DispatchCommand(t *testing.T) {
 
 	gw := NewGateway(bus, "http://127.0.0.1:8081")
 
-	var receivedCommand []byte
+	receivedChan := make(chan []byte, 1)
 	bus.Subscribe(context.Background(), "sec/tier2/drone/blue/bravo/command", func(key string, payload []byte) {
-		receivedCommand = payload
+		receivedChan <- payload
 	})
 
 	body := []byte(`{"target_vehicle":"bravo","command_type":"RETURN_TO_BASE","parameters":{}}`)
@@ -85,10 +85,11 @@ func TestGateway_DispatchCommand(t *testing.T) {
 		t.Fatalf("expected HTTP 200, got %d: %s", w.Code, w.Body.String())
 	}
 
-	time.Sleep(50 * time.Millisecond)
-
-	if len(receivedCommand) == 0 {
-		t.Fatalf("expected command envelope to be published to Zenoh")
+	var receivedCommand []byte
+	select {
+	case receivedCommand = <-receivedChan:
+	case <-time.After(2 * time.Second):
+		t.Fatalf("timed out waiting for command envelope to be published to Zenoh")
 	}
 
 	cmdEnv, err := zenohutil.ParseJSONEnvelope(receivedCommand)
