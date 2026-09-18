@@ -1,0 +1,222 @@
+name: DevSecOps Pipeline
+
+on:
+  push:
+    branches: [ "main" ]
+    tags: [ "v*" ]
+  pull_request:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  # =========================================================================
+  # 1. SECURITY SAST, SCA & SECRET SCANNING
+  # =========================================================================
+  security-audit:
+    name: Code Security (SAST / SCA / Secrets)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go 1.22
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+          check-latest: true
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      # Go Unit Tests
+      - name: Run Go Unit Tests
+        run: |
+          echo "Executing test suite..."
+          go test -v -race ./...
+
+      # Secret Detection (Gitleaks CLI)
+      - name: Secret Scan (Gitleaks CLI)
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # Go Dependency Vulnerability Scan (Govulncheck CLI)
+      - name: Go Vulnerability Scan (Govulncheck CLI)
+        run: |
+          echo "Installing and running govulncheck..."
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          govulncheck ./...
+
+      # Go SAST Security Analysis (Gosec CLI)
+      - name: Go SAST Scan (Gosec CLI)
+        run: |
+          echo "Installing and running gosec..."
+          go install github.com/securego/gosec/v2/cmd/gosec@latest
+          gosec -fmt=text -severity=high -confidence=high -exclude-dir=web ./...
+
+      # Python SAST Analysis (Bandit CLI)
+      - name: Python SAST Scan (Bandit CLI)
+        run: |
+          echo "Installing and running Bandit for any Python scripts..."
+          pip install bandit
+          bandit -r . -ll -ii || true
+
+  # =========================================================================
+  # 2. CONTAINER BUILD, TRIVY SCAN (BLOCK CRITICALS), SYFT SBOM & GHCR PUBLISH
+  # =========================================================================
+  build-scan-publish:
+    name: Container Build & Security Scan
+    needs: security-audit
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service:
+          - name: c2-gateway
+            dockerfile: deploy/Dockerfile.c2-gateway
+          - name: cds-guard
+            dockerfile: deploy/Dockerfile.cds-guard
+          - name: edge-agent
+            dockerfile: deploy/Dockerfile.edge-agent
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # Install Trivy CLI directly for console table reporting
+      - name: Install Trivy CLI
+        run: |
+          echo "Installing Trivy CLI..."
+          curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
+
+      # Install Syft CLI directly for SBOM generation
+      - name: Install Syft CLI
+        run: |
+          echo "Installing Syft CLI..."
+          curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh -s -- -b /usr/local/bin
+
+      # Authenticate to GitHub Container Registry (GHCR)
+      - name: Log in to GHCR
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Extract metadata (tags, labels)
+      - name: Extract Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}/${{ matrix.service.name }}
+          tags: |
+            type=ref,event=branch
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha,format=short
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
+
+      # Build image locally first for Trivy & Syft inspection
+      - name: Build Container Locally
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.service.dockerfile }}
+          load: true
+          tags: ${{ matrix.service.name }}:local
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # Trivy Container Scan (Fail on CRITICAL)
+      - name: Trivy Container Vulnerability Scan (Fail on CRITICAL)
+        run: |
+          echo "================================================================="
+          echo " SCANNING CONTAINER: ${{ matrix.service.name }}:local (TRIVY CLI)"
+          echo "================================================================="
+          trivy image \
+            --severity CRITICAL \
+            --exit-code 1 \
+            --ignore-unfixed \
+            --vuln-type os,library \
+            --format table \
+            ${{ matrix.service.name }}:local
+
+      # Generate Software Bill of Materials (SBOM) using Syft CLI
+      - name: Generate SBOM (SPDX & CycloneDX)
+        run: |
+          mkdir -p sbom
+          echo "Generating SPDX JSON SBOM..."
+          syft ${{ matrix.service.name }}:local -o spdx-json=sbom/sbom-${{ matrix.service.name }}.spdx.json
+          echo "Generating CycloneDX JSON SBOM..."
+          syft ${{ matrix.service.name }}:local -o cyclonedx-json=sbom/sbom-${{ matrix.service.name }}.cdx.json
+          ls -lh sbom/
+
+      # Upload SBOMs as workflow artifacts
+      - name: Upload SBOM Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom-${{ matrix.service.name }}
+          path: sbom/
+
+      # Push Verified Image to GHCR
+      - name: Push Container Image to GHCR
+        if: github.event_name != 'pull_request'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.service.dockerfile }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+
+  # =========================================================================
+  # 3. GITHUB RELEASE CREATION (ON TAG PUSH)
+  # =========================================================================
+  release:
+    name: Publish Release & SBOM Assets
+    needs: build-scan-publish
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Download all SBOMs
+        uses: actions/download-artifact@v4
+        with:
+          path: release-sboms/
+          merge-multiple: true
+
+      - name: Display Release Assets
+        run: |
+          echo "Release Assets to attach:"
+          ls -lh release-sboms/
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: Release ${{ github.ref_name }}
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+          files: |
+            release-sboms/*.json
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
