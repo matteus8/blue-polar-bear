@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Blue Polar Bear | Tactical C2 & Telemetry Mesh</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- TOP SYNTHETIC CLASSIFICATION BANNER -->
+  <header class="classification-banner tier-public" id="top-banner">
+    <span class="classification-tag">// SIMULATION ONLY // TIER-1: PUBLIC // SYNTHETIC ENCLAVE //</span>
+  </header>
+
+  <div class="app-layout">
+    <!-- SIDEBAR -->
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="logo-icon">❄️</div>
+        <div>
+          <h2>BLUE POLAR BEAR</h2>
+          <span class="subtext">Tactical Zero-Trust C2 Mesh</span>
+        </div>
+      </div>
+
+      <div class="system-status-card">
+        <div class="status-row">
+          <span>Zenoh Mesh:</span>
+          <span class="badge badge-success" id="mesh-status">ONLINE</span>
+        </div>
+        <div class="status-row">
+          <span>CDS Guard:</span>
+          <span class="badge badge-success" id="cds-status">FAIL-CLOSED (ACTIVE)</span>
+        </div>
+        <div class="status-row">
+          <span>Telemetry Stream:</span>
+          <span class="badge badge-info" id="ws-status">CONNECTING...</span>
+        </div>
+      </div>
+
+      <!-- FLEET LIST -->
+      <section class="section">
+        <div class="section-header">
+          <h3>TACTICAL FLEET</h3>
+          <span class="badge badge-count" id="fleet-count">0</span>
+        </div>
+        <div class="fleet-list" id="fleet-list">
+          <div class="empty-state">Awaiting vehicle telemetry...</div>
+        </div>
+      </section>
+
+      <!-- C2 FLIGHT COMMAND CONSOLE -->
+      <section class="section">
+        <div class="section-header">
+          <h3>C2 FLIGHT DISPATCH</h3>
+        </div>
+        <div class="command-panel">
+          <div class="form-group">
+            <label for="cmd-vehicle">Target Asset:</label>
+            <select id="cmd-vehicle">
+              <option value="bravo">Drone Bravo (Blue)</option>
+              <option value="alpha">Drone Alpha (Blue)</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="cmd-type">Command Action:</label>
+            <select id="cmd-type">
+              <option value="RETURN_TO_BASE">Return to Base (RTB)</option>
+              <option value="HOVER">Loiter / Hover</option>
+              <option value="PATROL">Resume Patrol</option>
+              <option value="ARM">Arm Propulsion</option>
+              <option value="DISARM">Disarm Propulsion</option>
+            </select>
+          </div>
+          <button class="btn btn-primary" id="btn-dispatch-cmd">DISPATCH C2 INSTRUCTION</button>
+          <div class="command-status" id="command-feedback"></div>
+        </div>
+      </section>
+
+      <!-- ZERO-TRUST TEST INJECTOR -->
+      <section class="section">
+        <div class="section-header">
+          <h3>ZERO-TRUST CDS VALIDATOR</h3>
+        </div>
+        <div class="test-injector">
+          <p class="injector-desc">Simulate live compliance breaches to test CDS fail-closed quarantine.</p>
+          <div class="button-stack">
+            <button class="btn btn-outline" id="btn-inject-tier2">Emit TIER-2 Restricted (Redact & Down-tag)</button>
+            <button class="btn btn-danger" id="btn-inject-tier3">Emit TIER-3 Critical (Trigger CDS Block)</button>
+            <button class="btn btn-warning" id="btn-inject-tamper">Emit Tampered Packet (Integrity Breach)</button>
+          </div>
+        </div>
+      </section>
+    </aside>
+
+    <!-- MAIN CONTENT AREA -->
+    <main class="main-content">
+      <!-- MAP SECTION -->
+      <div class="map-container">
+        <div id="map"></div>
+        <canvas id="canvas-fallback" class="canvas-fallback"></canvas>
+        <div class="map-overlay-hud">
+          <div class="hud-item">
+            <span class="hud-label">VIEW ENCLAVE</span>
+            <span class="hud-value" id="hud-enclave">TIER-1: PUBLIC</span>
+          </div>
+          <div class="hud-item">
+            <span class="hud-label">ACTIVE TRACKS</span>
+            <span class="hud-value" id="hud-tracks">0</span>
+          </div>
+          <div class="hud-item">
+            <span class="hud-label">CDS COARSENING</span>
+            <span class="hud-value">2 DECIMALS (~1.1 km)</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- BOTTOM MONITORING TABS -->
+      <div class="monitoring-deck">
+        <div class="tab-bar">
+          <button class="tab-btn active" data-tab="telemetry-log">LIVE TELEMETRY LOG</button>
+          <button class="tab-btn" data-tab="cds-quarantine">CDS DEAD LETTER QUEUE (DLQ)</button>
+        </div>
+
+        <div class="tab-content active" id="tab-telemetry-log">
+          <div class="table-wrapper">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>TIME</th>
+                  <th>SECURITY TIER</th>
+                  <th>ORIGIN</th>
+                  <th>VEHICLE</th>
+                  <th>STATE</th>
+                  <th>BATTERY</th>
+                  <th>COORDINATES</th>
+                  <th>ALTITUDE</th>
+                  <th>DIGEST</th>
+                </tr>
+              </thead>
+              <tbody id="telemetry-log-body">
+                <tr><td colspan="9" class="empty-cell">No packets received yet.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="tab-content" id="tab-cds-quarantine">
+          <div class="table-wrapper">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>RECORD ID</th>
+                  <th>TIME</th>
+                  <th>TOPIC</th>
+                  <th>REJECTION REASON</th>
+                  <th>SOURCE ENCLAVE</th>
+                  <th>TIER</th>
+                  <th>DETAILS</th>
+                </tr>
+              </thead>
+              <tbody id="dlq-log-body">
+                <tr><td colspan="7" class="empty-cell">Quarantine queue empty (No security violations detected).</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- BOTTOM SYNTHETIC CLASSIFICATION BANNER -->
+  <footer class="classification-banner tier-public" id="bottom-banner">
+    <span class="classification-tag">// SIMULATION ONLY // TIER-1: PUBLIC // SYNTHETIC ENCLAVE //</span>
+  </footer>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <script src="app.js"></script>
+</body>
+</html>

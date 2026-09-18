@@ -1,0 +1,48 @@
+services:
+  zenoh-gcs:
+    image: eclipse/zenoh:1.1.0
+    container_name: bp-zenoh-gcs
+    command: ["--config", "/etc/zenoh/zenoh-gcs.json5"]
+    volumes:
+      - ./configs/zenoh-gcs.json5:/etc/zenoh/zenoh-gcs.json5:ro
+    ports:
+      - "7447:7447"       # Zenoh Mesh TCP
+      - "8000:8000"       # Zenoh REST plugin & SSE
+    restart: unless-stopped
+
+  cds-guard:
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile.cds-guard
+    container_name: bp-cds-guard
+    command: ["-router", "http://zenoh-gcs:8000", "-audit-file", "/logs/cds-audit.jsonl"]
+    depends_on:
+      - zenoh-gcs
+    ports:
+      - "8081:8081"       # CDS DLQ & Health API
+    volumes:
+      - ./logs:/logs
+    restart: unless-stopped
+
+  c2-gateway:
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile.c2-gateway
+    container_name: bp-c2-gateway
+    command: ["-router", "http://zenoh-gcs:8000", "-port", "8080", "-cds-url", "http://cds-guard:8081"]
+    depends_on:
+      - zenoh-gcs
+      - cds-guard
+    ports:
+      - "8080:8080"       # Tactical COP UI & WebSocket
+    restart: unless-stopped
+
+  edge-agent-bravo:
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile.edge-agent
+    container_name: bp-edge-bravo
+    command: ["-id", "bravo", "-router", "http://zenoh-gcs:8000", "-rate", "1.0", "-emit-tier3=false"]
+    depends_on:
+      - zenoh-gcs
+    restart: unless-stopped
