@@ -1,0 +1,19 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Operating Systems
+.DS_Store
+Thumbs.db
+
+# Binaries / Builds
+bin/
+dist/
+build/
+
+# Local Environment & Secrets
+.env
+*.local
