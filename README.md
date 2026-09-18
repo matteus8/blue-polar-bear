@@ -67,8 +67,8 @@ This system is designed and tested across **physical distributed hardware**, not
 │     TACTICAL COP (Operator-Station)   │
 │  Endpoint: c2.platformstaq.com        │
 │  Role: Global Command & Control Web UI│
-│  Stack: React / HTML5 / Leaflet Map   │
-└───────────────────────────────────────┘
+│  Stack: HTML5 / Leaflet Map / Canvas  │
+└──────────────────┬────────────────────┘
 ```
 
 ---
@@ -77,20 +77,20 @@ This system is designed and tested across **physical distributed hardware**, not
 
 ```mermaid
 flowchart TD
-    subgraph EdgeVehicle["Edge-Node-01 (Raspberry Pi 5)"]
-        EP["Telemetry Generator (Go/Python)"]
-        CL["Command Listener"]
+    subgraph EdgeVehicle["Edge Fleet (Pi 5 / Companion Computers)"]
+        EP_GO["Go Edge Agent (cmd/edge-agent)"]
+        EP_PY["Python Edge Agent (cmd/edge-agent-py)"]
     end
 
-    subgraph TacticalGCS["Tactical-GCS-01 (Ubuntu Surface)"]
-        ZR["Zenoh Local Router"]
+    subgraph TacticalGCS["Tactical-GCS-01 (Tactical Enclave)"]
+        ZR["Zenoh Local Router (zenohd:7447 & REST:8000)"]
         subgraph CDSGuard["Simulated Cross Domain Solution (CDS)"]
-            SV["Schema Validator"]
+            SV["Schema Validator & Digest Verifier"]
             PE["Policy Enforcement Engine"]
             SR["Sanitizer & Down-Tagger"]
-            DLQ["Quarantine / Dead Letter Queue"]
+            DLQ["Quarantine / Dead Letter Queue (JSONL Audit Log)"]
         end
-        GCS_API["Local C2 Gateway API"]
+        GCS_API["Tactical C2 Gateway API & WS Hub (:8080)"]
     end
 
     subgraph CloudEgress["Cloud Relay & Perimeter (platformstaq.com)"]
@@ -98,24 +98,27 @@ flowchart TD
         CR["Zenoh Cloud Router (BLOS)"]
     end
 
-    subgraph OperationsHQ["Operator Workstation (Web C2)"]
+    subgraph OperationsHQ["Operator Workstation (Tactical COP)"]
         COP["Common Operating Picture (Web UI)"]
         BANNER["Dynamic Classification Banner"]
     end
 
-    EP -->|"sec/tier2/drone/blue/bravo/telem"| ZR
+    EP_GO -->|"sec/tier2/drone/blue/bravo/telemetry"| ZR
+    EP_PY -->|"sec/tier2/drone/blue/alpha/telemetry"| ZR
     ZR --> SV
-    SV -->|"Malformed / Unknown Field"| DLQ
-    SV -->|"Valid Schema"| PE
-    PE -->|"TIER-3 CRITICAL"| DLQ
+    SV -->|"Malformed / Digest Mismatch"| DLQ
+    SV -->|"Valid Envelope"| PE
+    PE -->|"TIER-3 CRITICAL (Fail-Closed)"| DLQ
     PE -->|"TIER-2 RESTRICTED"| SR
     PE -->|"TIER-1 PUBLIC"| GCS_API
-    SR -->|"Sanitized -> TIER-1"| GCS_API
+    SR -->|"Sanitized & Down-tagged -> TIER-1"| GCS_API
     GCS_API --> CF
     CF --> CR
     CR --> COP
     COP -->|"C2 Flight Command"| GCS_API
-    GCS_API -->|"drone/blue/bravo/command"| CL
+    GCS_API -->|"sec/tier2/.../command"| ZR
+    ZR --> EP_GO
+    ZR --> EP_PY
 ```
 
 ---
@@ -123,12 +126,12 @@ flowchart TD
 ## 4. Key Engineering Capabilities
 
 1. **Zero-Trust Cross Domain Solution (CDS):**
-   - Strict JSON/Protobuf schema enforcement on all ingress packets.
-   - Fail-closed security architecture: malformed packets are quarantined with tamper-evident audit logs.
-   - Automated High-to-Low redaction (coarsening GPS coordinates and stripping payload state).
+   - Cryptographic SHA-256 integrity verification on all security envelopes.
+   - Fail-closed security architecture: malformed or policy-violating packets are quarantined to an immutable JSONL audit log.
+   - Automated High-to-Low redaction (coarsening GPS coordinates to 2 decimals / ~1.1 km and stripping mission payload state).
 2. **Deterministic Multi-Language Systems:**
-   - Low-latency, high-concurrency ingestion and guard daemons written in **Go**.
-   - Edge agent simulators in **Go** and **Python**.
+   - Low-latency, high-concurrency ingestion and guard daemons written in **Go 1.22+**.
+   - Edge agent companion simulators in **Go** and **Python 3.10+**.
 3. **Resilient Dual-Mode Operation:**
    - **Tactical Mode:** 100% operational offline in disconnected/isolated field conditions.
    - **Enterprise Mode:** Automatic replication to global cloud COP via Cloudflare Zero-Trust tunnels whenever upstream backhaul is restored.
@@ -138,24 +141,88 @@ flowchart TD
 ## 5. Repository Structure
 
 ```text
-.
-├── README.md               # Project architecture and security specifications
-├── AGENTS.md               # Multi-agent operating procedures & development rules
-├── archive/                # Early prototypes and scratch explorations
+edgeCompute/
 ├── cmd/
-│   ├── edge-agent/         # Edge telemetry publisher (Go/Python)
-│   ├── cds-guard/          # Cross Domain Solution guard daemon (Go)
-│   └── c2-gateway/         # Telemetry aggregation & WebSocket server (Go)
-├── configs/
-│   ├── zenoh-edge.json5    # Pi 5 Zenoh configuration
-│   └── zenoh-gcs.json5     # GCS Zenoh router configuration
+│   ├── edge-agent/        # Telemetry generator simulating physical vehicle (Go)
+│   ├── edge-agent-py/     # Alternative Python edge agent (Pi 5 companion)
+│   ├── cds-guard/         # Cross Domain Solution guard & redaction daemon (Go)
+│   └── c2-gateway/        # WebSocket/HTTP server streaming telemetry to web (Go)
 ├── pkg/
-│   ├── schema/             # Telemetry & Security Header data models
-│   └── policy/             # CDS classification and redaction rules
-└── web/                    # C2 Tactical Dashboard (HTML5 / WebSockets)
+│   ├── schema/            # Canonical data structs (SecurityEnvelope, TelemetryPayload)
+│   ├── policy/            # CDS redaction rules, synthetic tiers, and DLQ audit log
+│   └── zenohutil/         # Reusable Zenoh session, topic key standards, and REST client
+├── web/                   # Web-based Tactical C2 Dashboard (HTML5 / Canvas / Leaflet)
+├── configs/
+│   ├── zenoh-edge.json5   # Pi 5 Zenoh configuration
+│   ├── zenoh-gcs.json5    # GCS Zenoh router configuration (REST plugin: 8000)
+│   └── zenoh-cloud.json5  # Cloud router configuration
+├── compose.yml            # Docker Compose orchestration for tactical mesh
+├── go.mod                 # Go module definitions
+├── README.md              # Project architecture and security specifications
+└── AGENTS.md              # Multi-agent operating procedures & development rules
 ```
 
 ---
 
-## 6. License
+## 6. Quickstart & Execution Guide
+
+### Option A: Local Multi-Container Stack (Docker Compose)
+Launch the Zenoh router, CDS Guard, C2 Gateway, and Edge vehicle simulator:
+```bash
+docker compose up --build
+```
+- **Tactical COP Dashboard:** Open [http://localhost:8080](http://localhost:8080)
+- **CDS Guard Inspection API:** [http://localhost:8081/health](http://localhost:8081/health) and [http://localhost:8081/dlq](http://localhost:8081/dlq)
+- **Zenoh REST Interface:** [http://localhost:8000](http://localhost:8000)
+
+---
+
+### Option B: Native Host Execution (Standalone Mock Bus)
+Each component includes an in-memory mock bus for standalone testing without a running Zenoh router daemon:
+
+1. **Start the Cross Domain Solution Guard:**
+   ```bash
+   go run cmd/cds-guard/main.go -mock -http-port 8081
+   ```
+
+2. **Start the Tactical C2 Gateway & Web COP:**
+   ```bash
+   go run cmd/c2-gateway/main.go -mock -port 8080
+   ```
+   Access the dashboard at `http://127.0.0.1:8080`.
+
+3. **Start the Vehicle Edge Agent:**
+   - **Go Simulator:**
+     ```bash
+     go run cmd/edge-agent/main.go -id bravo -rate 1.0 -mock
+     ```
+   - **Python Pi 5 Companion:**
+     ```bash
+     .venv/bin/python3 cmd/edge-agent-py/main.py --id alpha --rate 1.0
+     ```
+
+---
+
+## 7. Verification & Automated Testing Playbook
+
+Run the complete test suite across all subsystems:
+
+```bash
+# 1. Run all Go unit and integration tests
+go test -v ./...
+
+# 2. Run Python syntax verification and unit tests
+python3 -m py_compile cmd/edge-agent-py/*.py
+.venv/bin/python3 cmd/edge-agent-py/test_agent.py
+
+# 3. Verify binary compilation
+go build -o /dev/null ./cmd/cds-guard
+go build -o /dev/null ./cmd/c2-gateway
+go build -o /dev/null ./cmd/edge-agent
+```
+
+---
+
+## 8. License
+
 Licensed under the Apache License, Version 2.0.
