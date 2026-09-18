@@ -1,6 +1,7 @@
 package schema
 
 import (
+	"encoding/json"
 	"testing"
 	"time"
 )
@@ -44,6 +45,52 @@ func TestSecurityEnvelope_Validate(t *testing.T) {
 	env.Header.Classification = "TOP_SECRET_INVALID"
 	if err := env.Validate(); err == nil {
 		t.Fatalf("expected validation failure due to unauthorized classification tier")
+	}
+}
+
+func TestSecurityEnvelope_JSONRoundTrip(t *testing.T) {
+	telem := TelemetryPayload{
+		VehicleID:   "blue-delta",
+		VehicleType: "drone",
+		Team:        "blue",
+		State:       "AIRBORNE",
+		BatteryPct:  98.5,
+		Coordinates: Coordinates{
+			Latitude:  37.7880,
+			Longitude: -122.4450,
+			AltitudeM: 145.0,
+		},
+		Velocity: Velocity{
+			SpeedMps: 15.2,
+			VX:       10.5,
+			VY:       11.2,
+		},
+		HeadingDeg: 94.58,
+		MissionPayload: map[string]any{
+			"payload_mode":      "TACTICAL_RECON",
+			"target_tracking":   true,
+			"ew_emitter_active": false,
+			"sensor_temp_c":     38.5,
+		},
+		Sequence: 1,
+	}
+	env, err := NewTelemetryEnvelope(Tier2Restricted, "edge-node-01", telem, nil)
+	if err != nil {
+		t.Fatalf("creating envelope: %v", err)
+	}
+
+	data, err := json.Marshal(env)
+	if err != nil {
+		t.Fatalf("marshaling envelope: %v", err)
+	}
+
+	var env2 SecurityEnvelope
+	if err := json.Unmarshal(data, &env2); err != nil {
+		t.Fatalf("unmarshaling envelope: %v", err)
+	}
+
+	if err := env2.Validate(); err != nil {
+		t.Fatalf("validation failed after JSON roundtrip: %v", err)
 	}
 }
 

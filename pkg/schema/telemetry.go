@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"strings"
 	"time"
 )
@@ -81,6 +82,41 @@ type SecurityEnvelope struct {
 	Command   *CommandPayload   `json:"command,omitempty"`
 }
 
+func roundFloat(val float64, decimals int) float64 {
+	pow := math.Pow10(decimals)
+	return math.Round(val*pow) / pow
+}
+
+// Normalize rounds float values to fixed precisions for deterministic cryptographic hashing.
+func (c *Coordinates) Normalize() {
+	if c == nil {
+		return
+	}
+	c.Latitude = roundFloat(c.Latitude, 6)
+	c.Longitude = roundFloat(c.Longitude, 6)
+	c.AltitudeM = roundFloat(c.AltitudeM, 2)
+}
+
+func (v *Velocity) Normalize() {
+	if v == nil {
+		return
+	}
+	v.SpeedMps = roundFloat(v.SpeedMps, 2)
+	v.VX = roundFloat(v.VX, 2)
+	v.VY = roundFloat(v.VY, 2)
+	v.VZ = roundFloat(v.VZ, 2)
+}
+
+func (t *TelemetryPayload) Normalize() {
+	if t == nil {
+		return
+	}
+	t.Coordinates.Normalize()
+	t.Velocity.Normalize()
+	t.HeadingDeg = roundFloat(t.HeadingDeg, 1)
+	t.BatteryPct = roundFloat(t.BatteryPct, 1)
+}
+
 // ComputePayloadDigest calculates the SHA-256 digest of the data payload.
 func ComputePayloadDigest(payload any) (string, error) {
 	if payload == nil {
@@ -101,6 +137,7 @@ func NewTelemetryEnvelope(classification, origin string, telemetry TelemetryPayl
 		return nil, fmt.Errorf("invalid synthetic classification tier: %q", classification)
 	}
 
+	telemetry.Normalize()
 	digest, err := ComputePayloadDigest(telemetry)
 	if err != nil {
 		return nil, fmt.Errorf("computing telemetry digest: %w", err)
@@ -186,6 +223,7 @@ func (env *SecurityEnvelope) Validate() error {
 	var expectedDigest string
 	var err error
 	if env.Telemetry != nil {
+		env.Telemetry.Normalize()
 		if env.Telemetry.VehicleID == "" {
 			return errors.New("telemetry missing vehicle_id")
 		}

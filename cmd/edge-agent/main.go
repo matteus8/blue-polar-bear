@@ -64,6 +64,11 @@ func NewVehicleSim(id, vType, team string, lat, lon float64, alt, radius, speed 
 	}
 }
 
+func roundFloat(val float64, decimals int) float64 {
+	pow := math.Pow10(decimals)
+	return math.Round(val*pow) / pow
+}
+
 // Step advances the vehicle physics simulation by dt seconds.
 func (v *VehicleSim) Step(dt float64) schema.TelemetryPayload {
 	v.mu.Lock()
@@ -79,28 +84,29 @@ func (v *VehicleSim) Step(dt float64) schema.TelemetryPayload {
 			v.flightAngle -= 2 * math.Pi
 		}
 		// Calculate circular orbit around center
-		lat := v.centerLat + v.orbitRadius*math.Sin(v.flightAngle)
-		lon := v.centerLon + v.orbitRadius*math.Cos(v.flightAngle)
-		// Heading tangent to orbit
-		v.headingDeg = math.Mod((v.flightAngle*180/math.Pi)+90, 360)
-		// Battery consumption
-		v.batteryPct = math.Max(5.0, v.batteryPct-(0.04*dt))
+		lat := roundFloat(v.centerLat+v.orbitRadius*math.Sin(v.flightAngle), 6)
+		lon := roundFloat(v.centerLon+v.orbitRadius*math.Cos(v.flightAngle), 6)
+		v.headingDeg = roundFloat(math.Mod((v.flightAngle*180/math.Pi)+90, 360), 1)
+		v.batteryPct = roundFloat(math.Max(5.0, v.batteryPct-(0.04*dt)), 1)
+		alt := roundFloat(v.currentAlt+5.0*math.Sin(v.flightAngle*2), 2)
+		vx := roundFloat(v.speedMps*math.Cos(v.headingDeg*math.Pi/180), 2)
+		vy := roundFloat(v.speedMps*math.Sin(v.headingDeg*math.Pi/180), 2)
 
 		return schema.TelemetryPayload{
 			VehicleID:   v.id,
 			VehicleType: v.vehicleType,
 			Team:        v.team,
 			State:       v.state,
-			BatteryPct:  math.Round(v.batteryPct*10) / 10,
+			BatteryPct:  v.batteryPct,
 			Coordinates: schema.Coordinates{
 				Latitude:  lat,
 				Longitude: lon,
-				AltitudeM: v.currentAlt + 5.0*math.Sin(v.flightAngle*2),
+				AltitudeM: alt,
 			},
 			Velocity: schema.Velocity{
-				SpeedMps: v.speedMps,
-				VX:       v.speedMps * math.Cos(v.headingDeg*math.Pi/180),
-				VY:       v.speedMps * math.Sin(v.headingDeg*math.Pi/180),
+				SpeedMps: roundFloat(v.speedMps, 2),
+				VX:       vx,
+				VY:       vy,
 			},
 			HeadingDeg: v.headingDeg,
 			MissionPayload: map[string]any{
