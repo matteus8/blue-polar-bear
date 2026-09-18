@@ -1,39 +1,47 @@
 /* =========================================================
    Blue Polar Bear Tactical COP CSS
-   Claude / Anthropic Warm Charcoal & Terracotta Theme
+   Light Tan & Orange Palette (Warm Parchment, Linen & Terracotta)
    ========================================================= */
 
 :root {
-  /* Warm Dark & Sepia Charcoal Palette */
-  --bg-primary: #191817;         /* Deep warm charcoal background */
-  --bg-panel: #23211F;           /* Warm stone sidebar / panels */
-  --bg-card: #2B2825;            /* Elevated card surface */
-  --bg-card-hover: #34302C;      /* Hover card surface */
-  --border-color: #3C3732;       /* Subtle warm border */
-  --border-subtle: #2E2A26;      /* Faint divider line */
+  /* Surfaces & Backgrounds */
+  --bg-primary: #F8F5EE;          /* Warm parchment / linen page background */
+  --bg-panel: #EFEAE0;            /* Soft warm tan / almond sidebar & deck */
+  --bg-card: #FFFFFF;             /* Crisp warm white card surface */
+  --bg-card-hover: #FAF7F2;       /* Subtle warm cream hover */
+  --bg-elevated: #F4EFE6;         /* Secondary container tint */
 
-  /* Claude Warm Parchment & Tan Typography */
-  --text-primary: #F3EFEA;       /* Warm cream / parchment */
-  --text-secondary: #BDB5AA;     /* Warm muted tan */
-  --text-muted: #888177;         /* Warm stone gray */
+  /* Borders & Dividers */
+  --border-color: #DDD6C9;        /* Warm tan border */
+  --border-subtle: #E8E2D6;       /* Subtle separator */
+  --border-focus: #D97757;        /* Orange accent focus */
 
-  /* Claude Signature Accent */
-  --claude-terracotta: #D97757;  /* Claude signature warm orange */
-  --claude-terracotta-hover: #E28A6D;
-  --claude-terracotta-active: #C46749;
-  --claude-tan: #D4A373;         /* Warm tan accent */
-  --claude-tan-subtle: rgba(212, 163, 115, 0.12);
+  /* Typography (Warm espresso / walnut charcoal - high contrast, soft on eyes) */
+  --text-primary: #2B2621;        /* Deep warm espresso */
+  --text-secondary: #6E655C;      /* Muted warm walnut tan */
+  --text-muted: #968D82;          /* Soft stone gray */
 
-  /* Tactical Team Indicators (Subtle & Refined) */
-  --fleet-blue: #648BAE;         /* Warm slate blue */
-  --fleet-blue-bg: rgba(100, 139, 174, 0.14);
-  --fleet-red: #D06461;          /* Warm terracotta red */
-  --fleet-red-bg: rgba(208, 100, 97, 0.14);
+  /* Claude Signature Orange & Warm Tan */
+  --accent-orange: #D97757;       /* Claude terracotta orange */
+  --accent-orange-hover: #E38567;
+  --accent-orange-active: #C26344;
+  --accent-orange-subtle: #FBF0EB; /* Light terracotta tint */
+  --accent-tan: #B87938;          /* Warm amber tan */
+  --accent-tan-subtle: #F6EDE1;   /* Soft warm tan tint */
+
+  /* Tactical Team Colors (Muted Slate Blue & Terracotta Red) */
+  --fleet-blue: #326B94;          /* Refined slate blue */
+  --fleet-blue-bg: #EAF1F6;       /* Soft slate tint */
+  --fleet-red: #BA4540;           /* Warm terracotta red */
+  --fleet-red-bg: #F9ECEB;        /* Soft terracotta tint */
 
   /* Status Colors */
-  --status-green: #7EA885;       /* Warm sage */
-  --status-amber: #D99B52;       /* Warm amber */
-  --status-red: #C95B5B;         /* Rust red */
+  --status-green: #247545;        /* Warm sage */
+  --status-green-bg: #E9F4EE;
+  --status-amber: #B86B1E;        /* Warm amber */
+  --status-amber-bg: #FAF1E4;
+  --status-red: #BA3C38;          /* Warm rust red */
+  --status-red-bg: #FBECEB;
 
   /* Fonts */
   --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
@@ -57,7 +65,7 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* Custom minimal scrollbar */
+/* Custom minimal warm scrollbar */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -73,7 +81,7 @@ body {
   background: var(--text-muted);
 }
 
-/* SYNTHETIC CLASSIFICATION BANNERS (Muted & Professional) */
+/* SYNTHETIC CLASSIFICATION BANNERS (Muted Light Banners) */
 .classification-banner {
   height: 26px;
   display: flex;
@@ -89,21 +97,21 @@ body {
 }
 
 .tier-public {
-  background-color: #202A22;
-  color: #8EBF96;
-  border-bottom: 1px solid #2E3E31;
+  background-color: #EAF4ED;
+  color: #206E3B;
+  border-bottom: 1px solid #C6E3CD;
 }
 
 .tier-restricted {
-  background-color: #34281E;
-  color: #DEAB70;
-  border-bottom: 1px solid #4D3A29;
+  background-color: #FAF1E3;
+  color: #8C5718;
+  border-bottom: 1px solid #E8D3B2;
 }
 
 .tier-critical {
-  background-color: #361F22;
-  color: #DE7B83;
-  border-bottom: 1px solid #502A2E;
+  background-color: #FCECEE;
+  color: #8F2731;
+  border-bottom: 1px solid #EABEC4;
 }
 
 /* MAIN LAYOUT */
@@ -140,14 +148,15 @@ body {
 
 .brand h2 {
   font-size: 1.05rem;
-  font-weight: 600;
+  font-weight: 700;
   letter-spacing: 0.04em;
   color: var(--text-primary);
 }
 
 .brand .subtext {
   font-size: 0.75rem;
-  color: var(--claude-terracotta);
+  font-weight: 600;
+  color: var(--accent-orange);
   display: block;
   margin-top: 2px;
 }
@@ -161,6 +170,7 @@ body {
   flex-direction: column;
   gap: 0.5rem;
   font-size: 0.82rem;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.03);
 }
 
 .status-row {
@@ -180,39 +190,39 @@ body {
 }
 
 .badge-success {
-  background-color: rgba(126, 168, 133, 0.18);
+  background-color: var(--status-green-bg);
   color: var(--status-green);
-  border: 1px solid rgba(126, 168, 133, 0.35);
+  border: 1px solid #C4E2CF;
 }
 
 .badge-info {
-  background-color: var(--claude-tan-subtle);
-  color: var(--claude-tan);
-  border: 1px solid rgba(212, 163, 115, 0.3);
+  background-color: var(--accent-tan-subtle);
+  color: var(--accent-tan);
+  border: 1px solid #E8D5BC;
 }
 
 .badge-blue {
   background-color: var(--fleet-blue-bg);
   color: var(--fleet-blue);
-  border: 1px solid rgba(100, 139, 174, 0.35);
+  border: 1px solid #BDD4E4;
 }
 
 .badge-red {
   background-color: var(--fleet-red-bg);
   color: var(--fleet-red);
-  border: 1px solid rgba(208, 100, 97, 0.35);
+  border: 1px solid #E8C1BF;
 }
 
 .badge-danger {
-  background-color: rgba(201, 91, 91, 0.16);
+  background-color: var(--status-red-bg);
   color: var(--status-red);
-  border: 1px solid rgba(201, 91, 91, 0.35);
+  border: 1px solid #E8BEBC;
 }
 
 .badge-warning {
-  background-color: rgba(217, 155, 82, 0.16);
+  background-color: var(--status-amber-bg);
   color: var(--status-amber);
-  border: 1px solid rgba(217, 155, 82, 0.35);
+  border: 1px solid #ECD5B2;
 }
 
 .badge-count {
@@ -238,7 +248,7 @@ body {
 .section-header h3 {
   font-size: 0.78rem;
   color: var(--text-secondary);
-  font-weight: 600;
+  font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
@@ -258,20 +268,22 @@ body {
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
-  transition: background-color 0.15s, border-color 0.15s;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.03);
+  transition: background-color 0.15s, border-color 0.15s, box-shadow 0.15s;
 }
 
 .fleet-card-blue {
-  border-left: 3px solid var(--fleet-blue);
+  border-left: 4px solid var(--fleet-blue);
 }
 
 .fleet-card-red {
-  border-left: 3px solid var(--fleet-red);
+  border-left: 4px solid var(--fleet-red);
 }
 
 .fleet-card:hover {
   background-color: var(--bg-card-hover);
-  border-color: var(--text-muted);
+  border-color: #C8BFB0;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.06);
 }
 
 .fleet-card-header {
@@ -281,14 +293,14 @@ body {
 }
 
 .vehicle-callsign {
-  font-weight: 600;
+  font-weight: 700;
   font-size: 0.9rem;
   color: var(--fleet-blue);
   font-family: var(--font-mono);
 }
 
 .vehicle-callsign-red {
-  font-weight: 600;
+  font-weight: 700;
   font-size: 0.9rem;
   color: var(--fleet-red);
   font-family: var(--font-mono);
@@ -309,9 +321,9 @@ body {
 }
 
 .battery-bar {
-  height: 4px;
-  background-color: #211F1D;
-  border-radius: 2px;
+  height: 5px;
+  background-color: #E8E2D6;
+  border-radius: 3px;
   overflow: hidden;
   margin-top: 4px;
 }
@@ -330,6 +342,7 @@ body {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.03);
 }
 
 .form-group {
@@ -341,11 +354,11 @@ body {
 .form-group label {
   font-size: 0.74rem;
   color: var(--text-secondary);
-  font-weight: 500;
+  font-weight: 600;
 }
 
 select {
-  background-color: var(--bg-panel);
+  background-color: #FAFAF8;
   border: 1px solid var(--border-color);
   color: var(--text-primary);
   padding: 8px 10px;
@@ -357,14 +370,14 @@ select {
 }
 
 select:focus {
-  border-color: var(--claude-terracotta);
+  border-color: var(--accent-orange);
 }
 
 .btn {
   padding: 8px 14px;
   border-radius: 6px;
   cursor: pointer;
-  font-weight: 500;
+  font-weight: 600;
   font-size: 0.78rem;
   font-family: var(--font-sans);
   letter-spacing: 0.02em;
@@ -377,49 +390,49 @@ select:focus {
 }
 
 .btn-primary {
-  background-color: var(--claude-terracotta);
-  color: #FAF7F5;
+  background-color: var(--accent-orange);
+  color: #FFFFFF;
   border: none;
+  box-shadow: 0 1px 3px rgba(217, 119, 87, 0.25);
 }
 
 .btn-primary:hover {
-  background-color: var(--claude-terracotta-hover);
+  background-color: var(--accent-orange-hover);
 }
 
 .btn-primary:active {
-  background-color: var(--claude-terracotta-active);
+  background-color: var(--accent-orange-active);
 }
 
 .btn-danger {
-  background-color: rgba(201, 91, 91, 0.15);
+  background-color: var(--status-red-bg);
   color: var(--status-red);
-  border: 1px solid rgba(201, 91, 91, 0.35);
+  border: 1px solid #E8BEBC;
 }
 
 .btn-danger:hover {
-  background-color: rgba(201, 91, 91, 0.25);
+  background-color: #F8E2E0;
 }
 
 .btn-warning {
-  background-color: rgba(217, 155, 82, 0.15);
+  background-color: var(--status-amber-bg);
   color: var(--status-amber);
-  border: 1px solid rgba(217, 155, 82, 0.35);
+  border: 1px solid #ECD5B2;
 }
 
 .btn-warning:hover {
-  background-color: rgba(217, 155, 82, 0.25);
+  background-color: #F7E7CE;
 }
 
 .btn-outline {
-  background-color: transparent;
-  color: var(--text-secondary);
+  background-color: #FFFFFF;
+  color: var(--text-primary);
   border: 1px solid var(--border-color);
 }
 
 .btn-outline:hover {
   background-color: var(--bg-card-hover);
-  color: var(--text-primary);
-  border-color: var(--text-muted);
+  border-color: #C8BFB0;
 }
 
 .command-status {
@@ -437,6 +450,7 @@ select:focus {
   display: flex;
   flex-direction: column;
   gap: 0.6rem;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.03);
 }
 
 .injector-desc {
@@ -462,7 +476,7 @@ select:focus {
 .map-container {
   flex: 1.25;
   position: relative;
-  background-color: #151413;
+  background-color: #F4EFE6;
 }
 
 #map {
@@ -470,20 +484,16 @@ select:focus {
   height: 100%;
 }
 
-/* Subtle warm sepia tone for map tiles to match Claude aesthetic */
-#map .leaflet-tile {
-  filter: brightness(0.92) contrast(1.04) sepia(0.18) hue-rotate(330deg);
-}
-
 .leaflet-popup-content-wrapper {
-  background-color: #FAF7F5 !important;
-  color: #2C2927 !important;
+  background-color: #FFFFFF !important;
+  color: #2B2621 !important;
   border-radius: 8px !important;
-  box-shadow: 0 4px 16px rgba(0,0,0,0.3) !important;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.12) !important;
+  border: 1px solid var(--border-color) !important;
 }
 
 .leaflet-popup-tip {
-  background-color: #FAF7F5 !important;
+  background-color: #FFFFFF !important;
 }
 
 .canvas-fallback {
@@ -499,7 +509,7 @@ select:focus {
   position: absolute;
   top: 14px;
   right: 14px;
-  background-color: rgba(35, 33, 31, 0.88);
+  background-color: rgba(255, 255, 255, 0.94);
   backdrop-filter: blur(8px);
   border: 1px solid var(--border-color);
   border-radius: 8px;
@@ -507,7 +517,7 @@ select:focus {
   display: flex;
   gap: 18px;
   z-index: 500;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
 }
 
 .hud-item {
@@ -520,12 +530,13 @@ select:focus {
   color: var(--text-muted);
   font-family: var(--font-mono);
   letter-spacing: 0.04em;
+  font-weight: 600;
 }
 
 .hud-value {
   font-size: 0.8rem;
-  font-weight: 600;
-  color: var(--claude-terracotta);
+  font-weight: 700;
+  color: var(--accent-orange);
   font-family: var(--font-mono);
 }
 
@@ -541,7 +552,7 @@ select:focus {
 
 .tab-bar {
   display: flex;
-  background-color: var(--bg-primary);
+  background-color: #E6E0D4;
   border-bottom: 1px solid var(--border-color);
   padding: 0 0.5rem;
 }
@@ -552,8 +563,8 @@ select:focus {
   padding: 10px 18px;
   font-size: 0.75rem;
   font-family: var(--font-sans);
-  font-weight: 500;
-  color: var(--text-muted);
+  font-weight: 600;
+  color: var(--text-secondary);
   cursor: pointer;
   border-bottom: 2px solid transparent;
   transition: color 0.15s, border-color 0.15s;
@@ -564,8 +575,8 @@ select:focus {
 }
 
 .tab-btn.active {
-  color: var(--claude-terracotta);
-  border-bottom-color: var(--claude-terracotta);
+  color: var(--accent-orange);
+  border-bottom-color: var(--accent-orange);
   background-color: var(--bg-panel);
 }
 
@@ -588,6 +599,10 @@ select:focus {
   border-collapse: collapse;
   font-size: 0.74rem;
   font-family: var(--font-mono);
+  background-color: var(--bg-card);
+  border-radius: 6px;
+  overflow: hidden;
+  border: 1px solid var(--border-color);
 }
 
 .data-table th, .data-table td {
@@ -598,10 +613,10 @@ select:focus {
 
 .data-table th {
   color: var(--text-secondary);
-  background-color: var(--bg-panel);
+  background-color: #EAE4D8;
   position: sticky;
   top: 0;
-  font-weight: 600;
+  font-weight: 700;
   font-size: 0.7rem;
   letter-spacing: 0.04em;
   border-bottom: 1px solid var(--border-color);
@@ -609,7 +624,7 @@ select:focus {
 }
 
 .data-table tr:hover td {
-  background-color: rgba(255, 255, 255, 0.02);
+  background-color: #FAF7F2;
 }
 
 .empty-cell, .empty-state {
