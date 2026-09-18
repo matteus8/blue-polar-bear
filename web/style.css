@@ -187,8 +187,20 @@ body {
   transition: border-color 0.2s;
 }
 
+.fleet-card-blue {
+  border-left: 4px solid var(--accent-cyan);
+}
+
+.fleet-card-red {
+  border-left: 4px solid var(--status-red);
+}
+
 .fleet-card:hover {
   border-color: var(--accent-cyan);
+}
+
+.fleet-card-red:hover {
+  border-color: var(--status-red);
 }
 
 .fleet-card-header {
@@ -201,6 +213,12 @@ body {
   font-weight: 700;
   font-size: 0.95rem;
   color: var(--accent-cyan);
+}
+
+.vehicle-callsign-red {
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: var(--status-red);
 }
 
 .vehicle-meta {

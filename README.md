@@ -2,9 +2,9 @@
 
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Protocol: Eclipse Zenoh](https://img.shields.io/badge/Protocol-Eclipse_Zenoh_1.1.0-orange.svg)](https://zenoh.io/)
-[![Stack: Go + Python](https://img.shields.io/badge/Languages-Go_%7C_Python-00ADD8.svg)](https://go.dev/)
+[![Stack: Go](https://img.shields.io/badge/Language-Go_1.22+-00ADD8.svg)](https://go.dev/)
 
-> **A distributed, zero-trust Command & Control (C2) and Telemetry system featuring a simulated Cross Domain Solution (CDS) Guard, multi-tier classification tagging, and edge-to-cloud mesh routing across physical ARM64 and x86 hardware.**
+> **A distributed, zero-trust Tactical Command & Control (C2) and Telemetry system featuring a 10-drone swarm simulator, Cross Domain Solution (CDS) Guard, Data Mule buffering, Starlink satellite backhaul, and a browser-based Common Operating Picture (COP).**
 
 ---
 
@@ -23,118 +23,120 @@
 
 ---
 
-## 1. Project Overview
+## 1. Project Overview & Hybrid Architecture
 
 Modern defense, aerospace, and autonomous robotics operations operate in **DDIL** environments (**D**isconnected, **D**egraded, **I**ntermittent, **L**atent). Traditional monolithic cloud-only architectures fail when satellite links drop or edge nodes enter radio silence.
 
-**Blue Polar Bear** solves this by establishing a decentralized, multi-tiered mesh using **Eclipse Zenoh**:
-1. **Edge Companion Computing:** High-rate flight telemetry and local command handling on embedded hardware.
-2. **Tactical Field GCS & CDS Guard:** A local Ground Control Station that inspects every packet, rejects malformed/tampered payloads into a quarantine audit log, and sanitizes restricted data.
-3. **Beyond-Line-of-Sight (BLOS) Cloud Relay:** Zero-trust relay via Cloudflare (`platformstaq.com`) and cloud edge routing into a browser-based Common Operating Picture (COP).
+**Blue Polar Bear** solves this with a **Hybrid Mesh & API Architecture**:
+
+1. **Autonomous Edge Mesh (Local RF):** Drones communicate with low-latency pub/sub over **Eclipse Zenoh** on the local tactical boundary without requiring an Internet connection.
+2. **Tactical Data Mule (Field GCS):** The field Ground Control Station (e.g. Surface Pro / ruggedized laptop) acts as a **Data Mule**, storing, buffering, and fail-closed inspecting packets via the **Cross Domain Solution (CDS) Guard**.
+3. **Starlink Satellite Backhaul:** When satellite connectivity is available, Zenoh automatically synchronizes and replicates sanitized data across the **Starlink** link to the cloud relay (`relay.platformstaq.com`).
+4. **C2 API Gateway & Web COP:** The C2 Gateway translates Zenoh mesh topics into standard **WebSockets (`/ws/telemetry`)** and **REST APIs (`/api/v1/fleet`, `/api/v1/command`)**, allowing browser dashboards, ATAK, and enterprise consumers to ingest telemetry with zero proprietary client libraries.
 
 ---
 
-## 2. Hardware Fleet Deployment
+## 2. Hardware Fleet & Data Mule Deployment
 
-This system is designed and tested across **physical distributed hardware**, not simulated `localhost`:
+This system is tested across physical distributed hardware:
 
 ```
-┌───────────────────────────────────────┐
-│     EDGE HARDWARE (Edge-Node-01)      │
-│  Device: Raspberry Pi 5 (ARM64)       │
-│  Role: Vehicle Companion Computer     │
-│  Stack: Go / Python (Zenoh Edge Pub)  │
-└──────────────────┬────────────────────┘
-                   │ Local Tactical Mesh (Wi-Fi / LAN)
-                   ▼
 ┌────────────────────────────────────────────────────────┐
-│     TACTICAL GROUND CONTROL (Tactical-GCS-01)          │
+│             TACTICAL AIR FLEET (10 Drones)             │
+│   5 Blue Team Drones (Friendly C2 Controlled)          │
+│   5 Red Team Drones (Autonomous Adversary Tracks)      │
+│   Stack: Go Edge Agent (Zenoh Pub/Sub)                 │
+└───────────────────────────┬────────────────────────────┘
+                            │ Local Tactical Mesh (Wi-Fi / Tactical RF)
+                            ▼
+┌────────────────────────────────────────────────────────┐
+│     TACTICAL GROUND CONTROL & DATA MULE (Field GCS)    │
 │  Device: Surface Pro 3 (Ubuntu x86_64)                 │
-│  Role: Field Gateway & Local C2 Controller             │
+│  Role: Tactical Data Mule & Zero-Trust CDS Guard       │
 │  Stack: Go CDS Guard + Zenoh Router (zenohd)           │
-└──────────────────┬─────────────────────────────────────┘
-                   │ Encrypted Egress (Cloudflare Tunnel / TLS)
-                   ▼
+│  Function: Buffers & sanitizes data during comms blackouts
+└───────────────────────────┬────────────────────────────┘
+                            │ Starlink Satellite Backhaul / Cloudflare Tunnel
+                            ▼
 ┌────────────────────────────────────────────────────────┐
-│     CLOUD RELAY & DMZ (Cloud-Relay-01)                 │
+│           CLOUD RELAY & BLOS SWITCHBOARD               │
 │  Endpoint: relay.platformstaq.com                      │
-│  Role: Public Gateway / BLOS Switchboard               │
-│  Stack: Zenoh Cloud Router + Inspection Proxy          │
-└──────────────────┬─────────────────────────────────────┘
-                   │ WebSockets / WSS
-                   ▼
-┌───────────────────────────────────────┐
-│     TACTICAL COP (Operator-Station)   │
-│  Endpoint: c2.platformstaq.com        │
-│  Role: Global Command & Control Web UI│
-│  Stack: HTML5 / Leaflet Map / Canvas  │
-└──────────────────┬────────────────────┘
+│  Role: Public Gateway / Enterprise Replication         │
+│  Stack: Zenoh Cloud Router + C2 API Gateway            │
+└───────────────────────────┬────────────────────────────┘
+                            │ WebSockets / WSS (:8080)
+                            ▼
+┌────────────────────────────────────────────────────────┐
+│            TACTICAL COP (Operator Workstation)         │
+│  Endpoint: c2.platformstaq.com                         │
+│  Role: Global Command & Control Web UI                 │
+│  Stack: HTML5 / Canvas Radar / Leaflet Map             │
+└────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## 3. System Architecture & Cross Domain Solution (CDS)
+## 3. End-to-End System Architecture & Data Flow
 
 ```mermaid
 flowchart TD
-    subgraph EdgeVehicle["Edge Fleet (Pi 5 / Companion Computers)"]
-        EP_GO["Go Edge Agent (cmd/edge-agent)"]
-        EP_PY["Python Edge Agent (cmd/edge-agent-py)"]
+    subgraph TacticalEdge["Tactical Air Fleet (10 Drones)"]
+        BLUE["5 Blue Drones (Friendly Patrol)"]
+        RED["5 Red Drones (Adversary Tracks)"]
     end
 
-    subgraph TacticalGCS["Tactical-GCS-01 (Tactical Enclave)"]
+    subgraph DataMule["Tactical Data Mule (Field GCS)"]
         ZR["Zenoh Local Router (zenohd:7447 & REST:8000)"]
         subgraph CDSGuard["Simulated Cross Domain Solution (CDS)"]
             SV["Schema Validator & Digest Verifier"]
             PE["Policy Enforcement Engine"]
             SR["Sanitizer & Down-Tagger"]
-            DLQ["Quarantine / Dead Letter Queue (JSONL Audit Log)"]
+            DLQ["Dead Letter Queue (JSONL Audit Log)"]
         end
-        GCS_API["Tactical C2 Gateway API & WS Hub (:8080)"]
+        BUFFER["Tactical Data Mule Buffer"]
     end
 
-    subgraph CloudEgress["Cloud Relay & Perimeter (platformstaq.com)"]
-        CF["Cloudflare Edge Protection"]
-        CR["Zenoh Cloud Router (BLOS)"]
+    subgraph SatcomLink["BLOS Backhaul"]
+        STARLINK["Starlink Satellite Backhaul"]
     end
 
-    subgraph OperationsHQ["Operator Workstation (Tactical COP)"]
-        COP["Common Operating Picture (Web UI)"]
+    subgraph CloudEnterprise["Cloud Relay & Operations HQ"]
+        C2_GW["Tactical C2 Gateway API & WS Hub (:8080)"]
+        COP["Common Operating Picture Dashboard (web/)"]
         BANNER["Dynamic Classification Banner"]
     end
 
-    EP_GO -->|"sec/tier2/drone/blue/bravo/telemetry"| ZR
-    EP_PY -->|"sec/tier2/drone/blue/alpha/telemetry"| ZR
+    BLUE -->|"sec/tier2/drone/blue/.../telemetry"| ZR
+    RED -->|"sec/tier2/drone/red/.../telemetry"| ZR
     ZR --> SV
-    SV -->|"Malformed / Digest Mismatch"| DLQ
+    SV -->|"Malformed / Tampered Digest"| DLQ
     SV -->|"Valid Envelope"| PE
     PE -->|"TIER-3 CRITICAL (Fail-Closed)"| DLQ
     PE -->|"TIER-2 RESTRICTED"| SR
-    PE -->|"TIER-1 PUBLIC"| GCS_API
-    SR -->|"Sanitized & Down-tagged -> TIER-1"| GCS_API
-    GCS_API --> CF
-    CF --> CR
-    CR --> COP
-    COP -->|"C2 Flight Command"| GCS_API
-    GCS_API -->|"sec/tier2/.../command"| ZR
-    ZR --> EP_GO
-    ZR --> EP_PY
+    PE -->|"TIER-1 PUBLIC"| BUFFER
+    SR -->|"Sanitized & Down-tagged -> TIER-1"| BUFFER
+    BUFFER --> STARLINK
+    STARLINK --> C2_GW
+    C2_GW -->|"WebSocket /ws/telemetry"| COP
+    COP -->|"C2 Flight Command (RTB / Hover / Patrol)"| C2_GW
+    C2_GW -->|"sec/tier2/drone/blue/.../command"| STARLINK
+    STARLINK --> ZR
+    ZR --> BLUE
 ```
 
 ---
 
-## 4. Key Engineering Capabilities
+## 4. Swarm Operational Behavior (10 Drones)
 
-1. **Zero-Trust Cross Domain Solution (CDS):**
-   - Cryptographic SHA-256 integrity verification on all security envelopes.
-   - Fail-closed security architecture: malformed or policy-violating packets are quarantined to an immutable JSONL audit log.
-   - Automated High-to-Low redaction (coarsening GPS coordinates to 2 decimals / ~1.1 km and stripping mission payload state).
-2. **Deterministic Multi-Language Systems:**
-   - Low-latency, high-concurrency ingestion and guard daemons written in **Go 1.22+**.
-   - Edge agent companion simulators in **Go** and **Python 3.10+**.
-3. **Resilient Dual-Mode Operation:**
-   - **Tactical Mode:** 100% operational offline in disconnected/isolated field conditions.
-   - **Enterprise Mode:** Automatic replication to global cloud COP via Cloudflare Zero-Trust tunnels whenever upstream backhaul is restored.
+The system simulates a live tactical scenario:
+* **Blue Fleet (5 Friendly Drones):**
+  - Callsigns: `blue-alpha`, `blue-bravo`, `blue-charlie`, `blue-delta`, `blue-echo`
+  - Clustered in the friendly western operating sector.
+  - Interactive C2 Dispatch: Operators can command any Blue drone to **Return to Base (RTB)**, **Hover / Loiter**, **Patrol**, or **Arm / Disarm**.
+* **Red Fleet (5 Adversary Drones):**
+  - Callsigns: `red-1`, `red-2`, `red-3`, `red-4`, `red-5`
+  - Clustered in the adversary eastern operating sector.
+  - Follow autonomous patrol trajectories and emit adversary mission sensor payloads.
 
 ---
 
@@ -142,15 +144,14 @@ flowchart TD
 
 ```text
 edgeCompute/
-├── .agents/skills/        # Antigravity project skills & operational runbooks
+├── .agents/skills/        # Specialized Antigravity agent runbooks
 │   ├── cds-policy-enforcer/
 │   ├── edge-agent-companion/
 │   ├── tactical-c2-dispatch/
 │   ├── zenoh-mesh-ops/
 │   └── zero-trust-testing/
 ├── cmd/
-│   ├── edge-agent/        # Telemetry generator simulating physical vehicle (Go)
-│   ├── edge-agent-py/     # Alternative Python edge agent (Pi 5 companion)
+│   ├── edge-agent/        # 10-drone swarm simulator (5 Blue, 5 Red) (Go)
 │   ├── cds-guard/         # Cross Domain Solution guard & redaction daemon (Go)
 │   └── c2-gateway/        # WebSocket/HTTP server streaming telemetry to web (Go)
 ├── pkg/
@@ -159,7 +160,7 @@ edgeCompute/
 │   └── zenohutil/         # Reusable Zenoh session, topic key standards, and REST client
 ├── web/                   # Web-based Tactical C2 Dashboard (HTML5 / Canvas / Leaflet)
 ├── configs/
-│   ├── zenoh-edge.json5   # Pi 5 Zenoh configuration
+│   ├── zenoh-edge.json5   # Edge client configuration
 │   ├── zenoh-gcs.json5    # GCS Zenoh router configuration (REST plugin: 8000)
 │   └── zenoh-cloud.json5  # Cloud router configuration
 ├── deploy/                # Container build specifications
@@ -174,24 +175,10 @@ edgeCompute/
 
 ---
 
-## 6. Autonomous Agent Skills
-
-This workspace provides specialized Antigravity agent skills under `skills/` and `.agents/skills/`:
-
-| Skill Name | Path | Scope & Responsibilities |
-| :--- | :--- | :--- |
-| **`cds-policy-enforcer`** | [`.agents/skills/cds-policy-enforcer/SKILL.md`](.agents/skills/cds-policy-enforcer/SKILL.md) | Zero-trust CDS rule enforcement, synthetic tier policies, coordinate coarsening, sensitive payload sanitization, and DLQ audit inspection. |
-| **`zenoh-mesh-ops`** | [`.agents/skills/zenoh-mesh-ops/SKILL.md`](.agents/skills/zenoh-mesh-ops/SKILL.md) | Eclipse Zenoh routing, structured topic key conventions (`sec/<tier>/<type>/<team>/<id>/<stream>`), router deployment, and REST/SSE debugging. |
-| **`tactical-c2-dispatch`** | [`.agents/skills/tactical-c2-dispatch/SKILL.md`](.agents/skills/tactical-c2-dispatch/SKILL.md) | Tactical C2 Gateway operations, WebSocket streaming bridge (`/ws/telemetry`), fleet state tracking, and signed flight command dispatch. |
-| **`edge-agent-companion`** | [`.agents/skills/edge-agent-companion/SKILL.md`](.agents/skills/edge-agent-companion/SKILL.md) | Vehicle companion agent workflows for Raspberry Pi 5 (ARM64) and Go simulators, flight physics, battery decay tuning, and C2 listeners. |
-| **`zero-trust-testing`** | [`.agents/skills/zero-trust-testing/SKILL.md`](.agents/skills/zero-trust-testing/SKILL.md) | Automated testing playbooks, Go verification (`go test -v ./...`), Python syntax/unit tests, and containerized smoke test procedures. |
-
----
-
-## 7. Quickstart & Execution Guide
+## 6. Quickstart & Execution Guide
 
 ### Option A: Local Multi-Container Stack (Docker Compose)
-Launch the Zenoh router, CDS Guard, C2 Gateway, and Edge vehicle simulator:
+Launch the Zenoh router, CDS Guard, C2 Gateway, and 10-drone swarm:
 ```bash
 docker compose up --build
 ```
@@ -202,7 +189,7 @@ docker compose up --build
 ---
 
 ### Option B: Native Host Execution (Standalone Mock Bus)
-Each component includes an in-memory mock bus for standalone testing without a running Zenoh router daemon:
+Each component includes an in-memory mock bus for testing without running a Zenoh daemon:
 
 1. **Start the Cross Domain Solution Guard:**
    ```bash
@@ -215,19 +202,14 @@ Each component includes an in-memory mock bus for standalone testing without a r
    ```
    Access the dashboard at `http://127.0.0.1:8080`.
 
-3. **Start the Vehicle Edge Agent:**
-   - **Go Simulator:**
-     ```bash
-     go run cmd/edge-agent/main.go -id bravo -rate 1.0 -mock
-     ```
-   - **Python Pi 5 Companion:**
-     ```bash
-     .venv/bin/python3 cmd/edge-agent-py/main.py --id alpha --rate 1.0
-     ```
+3. **Start the 10-Drone Swarm Simulator (5 Blue, 5 Red):**
+   ```bash
+   go run cmd/edge-agent/main.go -swarm -blue-count 5 -red-count 5 -mock
+   ```
 
 ---
 
-## 8. Verification & Automated Testing Playbook
+## 7. Verification & Automated Testing Playbook
 
 Run the complete test suite across all subsystems:
 
@@ -235,18 +217,19 @@ Run the complete test suite across all subsystems:
 # 1. Run all Go unit and integration tests
 go test -v ./...
 
-# 2. Run Python syntax verification and unit tests
-python3 -m py_compile cmd/edge-agent-py/*.py
-.venv/bin/python3 cmd/edge-agent-py/test_agent.py
-
-# 3. Verify binary compilation
+# 2. Verify all Go production binaries compile
 go build -o /dev/null ./cmd/cds-guard
 go build -o /dev/null ./cmd/c2-gateway
 go build -o /dev/null ./cmd/edge-agent
+
+# 3. Test multi-container stack integration
+docker compose up -d --build
+docker compose ps
+docker compose down
 ```
 
 ---
 
-## 9. License
+## 8. License
 
 Licensed under the Apache License, Version 2.0.

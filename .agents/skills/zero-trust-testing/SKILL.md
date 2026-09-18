@@ -24,18 +24,7 @@ To run with coverage profiling:
 go test -v -cover ./...
 ```
 
-### 2. Verify Python Syntax & Test Suites
-
-Verify syntax compliance and run the Python edge agent test suite:
-```bash
-# Syntax check
-python3 -m py_compile cmd/edge-agent-py/*.py
-
-# Unit tests
-.venv/bin/python3 cmd/edge-agent-py/test_agent.py
-```
-
-### 3. Verify Production Binary Compilation
+### 2. Verify Production Binary Compilation
 
 Ensure all Go daemons compile without linker or dependency issues:
 ```bash
@@ -44,7 +33,7 @@ go build -o /dev/null ./cmd/c2-gateway
 go build -o /dev/null ./cmd/edge-agent
 ```
 
-### 4. Full Stack Container Integration Smoke Test
+### 3. Full Stack Container Integration Smoke Test
 
 Launch the complete multi-container stack and verify inter-service communication:
 ```bash
@@ -67,7 +56,7 @@ curl -s http://localhost:8000/sec/** | jq .
 docker compose down
 ```
 
-### 5. Specific Zero-Trust Invariant Checks
+### 4. Specific Zero-Trust Invariant Checks
 
 * **Integrity Tamper Test:** Modifying any payload byte without updating `header.digest` MUST fail envelope validation with `cryptographic digest mismatch`.
 * **TIER-3 Egress Test:** Any packet with `TIER-3: CRITICAL` reaching the CDS Guard MUST be routed to the DLQ and rejected from egress.

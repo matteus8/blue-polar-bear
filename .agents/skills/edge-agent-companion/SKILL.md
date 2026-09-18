@@ -1,64 +1,60 @@
 ---
 name: edge-agent-companion
 description: >-
-  Builds, runs, and tunes vehicle companion agents for ARM64 hardware (Raspberry Pi 5)
-  and simulated flight dynamics in Go and Python. Use this skill when deploying edge
-  agents, adjusting flight physics, testing battery models, or configuring physical
-  vehicle companion computers.
+  Builds, runs, and tunes the 10-drone tactical swarm simulator in Go (5 Blue friendly,
+  5 Red adversary). Use this skill when deploying edge agents, adjusting orbital flight
+  dynamics, testing battery models, or simulating C2 command responses.
 ---
 
-# Edge Vehicle Companion Agent Skill
+# Edge Vehicle Companion & Swarm Simulator Skill
 
-This skill provides operational and development procedures for edge companion agents simulating physical drones and rovers.
+This skill provides operational and development procedures for the multi-vehicle swarm simulator in Blue Polar Bear.
 
-## Available Agent Implementations
+## Swarm Architecture (10 Drones)
 
-1. **Go Companion Agent (`cmd/edge-agent/`):** High-concurrency, low-latency telemetry generator with orbital waypoint simulation and multi-tier emission.
-2. **Python Companion Agent (`cmd/edge-agent-py/`):** Dedicated companion script for Raspberry Pi 5 hardware running Python 3.10+ and the `eclipse-zenoh` SDK.
+The Go edge simulator (`cmd/edge-agent/`) manages concurrent autonomous drone instances using lightweight goroutines:
+
+* **Blue Fleet (5 Friendly Drones):**
+  - Callsigns: `blue-alpha`, `blue-bravo`, `blue-charlie`, `blue-delta`, `blue-echo`
+  - Base coordinates: Friendly western sector (`37.7700, -122.4300`)
+  - Subscribes to C2 flight instructions on `sec/tier2/drone/blue/<id>/command`.
+* **Red Fleet (5 Adversary Drones):**
+  - Callsigns: `red-1`, `red-2`, `red-3`, `red-4`, `red-5`
+  - Base coordinates: Adversary eastern sector (`37.7950, -122.3950`)
+  - Executes autonomous adversary patrol loops.
 
 ## Operational Procedures
 
-### 1. Running the Go Edge Simulator
+### 1. Running the Full 10-Drone Swarm
 
-Run Drone Bravo with 1 Hz telemetry emission:
+Launch all 10 drones (5 Blue, 5 Red) pointing to the local Zenoh router:
 ```bash
-# Connect to local Zenoh router REST interface:
-go run cmd/edge-agent/main.go -id bravo -type drone -team blue -rate 1.0
-
-# Run in standalone mock mode (no router required):
-go run cmd/edge-agent/main.go -id bravo -mock -rate 1.0
-
-# Enable periodic TIER-3 Sovereign packet emission (to test CDS fail-closed quarantine):
-go run cmd/edge-agent/main.go -id bravo -emit-tier3=true
+go run cmd/edge-agent/main.go -swarm -blue-count 5 -red-count 5 -router http://127.0.0.1:8000 -rate 1.0
 ```
 
-### 2. Running the Python Pi 5 Companion Agent
-
-Run the Python companion computer agent using the project virtual environment:
+To run in standalone mock mode without a router daemon:
 ```bash
-# Activate environment & run with default config:
-.venv/bin/python3 cmd/edge-agent-py/main.py --id alpha --type drone --team blue --rate 1.0
-
-# Point to specific Zenoh edge config:
-.venv/bin/python3 cmd/edge-agent-py/main.py --id alpha --config configs/zenoh-edge.json5
+go run cmd/edge-agent/main.go -swarm -blue-count 5 -red-count 5 -mock
 ```
 
-### 3. Deploying to Physical Raspberry Pi 5 (ARM64)
+### 2. Running a Single Vehicle for Isolated Testing
 
-To cross-compile the Go edge agent for physical ARM64 hardware:
+Run an individual vehicle:
 ```bash
-GOOS=linux GOARCH=arm64 go build -ldflags="-w -s" -o bin/edge-agent-arm64 ./cmd/edge-agent
+go run cmd/edge-agent/main.go -id bravo -team blue -rate 1.0 -mock
 ```
-Deploy the binary or run Python on the Pi:
+
+### 3. Emitting Periodic TIER-3 Sovereign Payloads
+
+Enable periodic `TIER-3: CRITICAL` emission (every 15th packet on drone 1) to verify CDS fail-closed quarantine:
 ```bash
-scp bin/edge-agent-arm64 pi@pi-ip:~/
-scp configs/zenoh-edge.json5 pi@pi-ip:~/
+go run cmd/edge-agent/main.go -swarm -emit-tier3=true
 ```
 
 ### 4. Simulating C2 Flight Modes
 
-Both agents implement an internal flight state machine:
-* `AIRBORNE` / `PATROL`: Circular orbit around base coordinates with battery consumption of 0.04-0.05% per second.
+Each drone implements an internal flight state machine:
+* `AIRBORNE` / `PATROL`: Circular orbit around base coordinates with battery consumption of 0.04% per second.
 * `HOVER`: Stationary loiter holding position with reduced battery burn.
-* `RTB`: Descent at -2 m/s until reaching ground elevation, then transitions to `LANDED`.
+* `RTB`: Controlled descent at -2 m/s until reaching ground elevation, then transitions to `LANDED`.
 * `LANDED`: Propulsion disarmed, awaiting `ARM` instruction.

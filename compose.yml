@@ -37,12 +37,12 @@ services:
       - "8080:8080"       # Tactical COP UI & WebSocket
     restart: unless-stopped
 
-  edge-agent-bravo:
+  edge-swarm:
     build:
       context: .
       dockerfile: deploy/Dockerfile.edge-agent
-    container_name: bp-edge-bravo
-    command: ["-id", "bravo", "-router", "http://zenoh-gcs:8000", "-rate", "1.0", "-emit-tier3=false"]
+    container_name: bp-edge-swarm
+    command: ["-swarm", "-blue-count", "5", "-red-count", "5", "-router", "http://zenoh-gcs:8000", "-rate", "1.0"]
     depends_on:
       - zenoh-gcs
     restart: unless-stopped

@@ -17,6 +17,7 @@
   const telemetryBodyEl = document.getElementById("telemetry-log-body");
   const dlqBodyEl = document.getElementById("dlq-log-body");
   const cmdFeedbackEl = document.getElementById("command-feedback");
+  const cmdVehicleSelect = document.getElementById("cmd-vehicle");
 
   // Tab switching
   document.querySelectorAll(".tab-btn").forEach(btn => {
@@ -33,7 +34,7 @@
   function initMap() {
     if (typeof L !== "undefined") {
       try {
-        state.map = L.map("map").setView([37.7749, -122.4194], 13);
+        state.map = L.map("map").setView([37.7800, -122.4150], 13);
         L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
           attribution: '&copy; CartoDB &copy; OpenStreetMap',
           maxZoom: 19
@@ -86,9 +87,10 @@
 
     // Draw vehicles on canvas fallback
     Object.values(state.fleet).forEach(v => {
-      const x = (w / 2) + ((v.telemetry.coordinates.lon + 122.4194) * 5000);
-      const y = (h / 2) - ((v.telemetry.coordinates.lat - 37.7749) * 5000);
-      ctx.fillStyle = "#00e5ff";
+      const isRed = v.telemetry.team === "red";
+      const x = (w / 2) + ((v.telemetry.coordinates.lon + 122.4150) * 4500);
+      const y = (h / 2) - ((v.telemetry.coordinates.lat - 37.7800) * 4500);
+      ctx.fillStyle = isRed ? "#ef4444" : "#00e5ff";
       ctx.beginPath();
       ctx.arc(x, y, 6, 0, Math.PI * 2);
       ctx.fill();
@@ -145,6 +147,7 @@
         header: env.header,
         tracks: []
       };
+      updateCommandVehicleDropdown();
     } else {
       state.fleet[vID].telemetry = t;
       state.fleet[vID].header = env.header;
@@ -168,22 +171,25 @@
     }
   }
 
-  // Update Leaflet marker and breadcrumb track
+  // Update Leaflet marker and breadcrumb track with Team colors
   function updateMapMarker(vID, coord, t) {
     if (!state.map) return;
+
+    const isRed = t.team === "red";
+    const color = isRed ? "#ef4444" : "#00e5ff";
 
     if (!state.markers[vID]) {
       const icon = L.divIcon({
         className: 'vehicle-marker',
-        html: `<div style="background:#00e5ff; width:12px; height:12px; border-radius:50%; border:2px solid #fff; box-shadow:0 0 8px #00e5ff;"></div>`,
+        html: `<div style="background:${color}; width:13px; height:13px; border-radius:50%; border:2px solid #fff; box-shadow:0 0 10px ${color};"></div>`,
         iconSize: [16, 16],
         iconAnchor: [8, 8]
       });
       state.markers[vID] = L.marker(coord, { icon }).addTo(state.map);
       state.polylines[vID] = L.polyline(state.fleet[vID].tracks, {
-        color: '#00e5ff',
+        color: color,
         weight: 2,
-        opacity: 0.7,
+        opacity: 0.75,
         dashArray: '4, 4'
       }).addTo(state.map);
     } else {
@@ -192,33 +198,64 @@
     }
 
     state.markers[vID].bindPopup(`
-      <b>${t.vehicle_id.toUpperCase()}</b> (${t.team})<br>
-      State: ${t.state}<br>
-      Alt: ${t.coordinates.alt_m.toFixed(1)}m | Spd: ${t.velocity.speed_mps.toFixed(1)}m/s<br>
-      Battery: ${t.battery_pct.toFixed(1)}%
+      <b style="color:${color}; font-size:1.1em;">${t.vehicle_id.toUpperCase()}</b> [${t.team.toUpperCase()} TEAM]<br>
+      <b>State:</b> ${t.state}<br>
+      <b>Altitude:</b> ${t.coordinates.alt_m.toFixed(1)}m | <b>Speed:</b> ${t.velocity.speed_mps.toFixed(1)}m/s<br>
+      <b>Battery:</b> ${t.battery_pct.toFixed(1)}%<br>
+      <b>Coordinates:</b> ${t.coordinates.lat.toFixed(4)}, ${t.coordinates.lon.toFixed(4)}
     `);
   }
 
-  // Render Fleet Sidebar
+  // Update C2 Command Target dropdown with all active vehicles
+  function updateCommandVehicleDropdown() {
+    if (!cmdVehicleSelect) return;
+    const currentVal = cmdVehicleSelect.value;
+    const vehicles = Object.values(state.fleet);
+
+    cmdVehicleSelect.innerHTML = vehicles.map(v => {
+      const t = v.telemetry;
+      return `<option value="${t.vehicle_id}">${t.vehicle_id.toUpperCase()} (${t.team.toUpperCase()})</option>`;
+    }).join("");
+
+    if (currentVal && state.fleet[currentVal]) {
+      cmdVehicleSelect.value = currentVal;
+    }
+  }
+
+  // Render Fleet Sidebar with Blue and Red team groupings
   function renderFleetList() {
     const vehicles = Object.values(state.fleet);
-    fleetCountEl.textContent = vehicles.length;
-    document.getElementById("hud-tracks").textContent = vehicles.length;
+    const blueCount = vehicles.filter(v => v.telemetry.team === "blue").length;
+    const redCount = vehicles.filter(v => v.telemetry.team === "red").length;
+
+    fleetCountEl.textContent = `${vehicles.length}`;
+    document.getElementById("hud-tracks").textContent = `BLUE: ${blueCount} | RED: ${redCount} (TOTAL: ${vehicles.length})`;
 
     if (vehicles.length === 0) {
       fleetListEl.innerHTML = `<div class="empty-state">Awaiting vehicle telemetry...</div>`;
       return;
     }
 
+    // Sort: Blue fleet first, then Red fleet
+    vehicles.sort((a, b) => {
+      if (a.telemetry.team !== b.telemetry.team) {
+        return a.telemetry.team === "blue" ? -1 : 1;
+      }
+      return a.telemetry.vehicle_id.localeCompare(b.telemetry.vehicle_id);
+    });
+
     fleetListEl.innerHTML = vehicles.map(v => {
       const t = v.telemetry;
       const h = v.header;
+      const isRed = t.team === "red";
+      const teamClass = isRed ? "fleet-card-red" : "fleet-card-blue";
+      const callsignClass = isRed ? "vehicle-callsign-red" : "vehicle-callsign";
       const batColor = t.battery_pct > 50 ? "var(--status-green)" : t.battery_pct > 20 ? "var(--status-amber)" : "var(--status-red)";
       return `
-        <div class="fleet-card">
+        <div class="fleet-card ${teamClass}">
           <div class="fleet-card-header">
-            <span class="vehicle-callsign">${t.vehicle_id.toUpperCase()}</span>
-            <span class="vehicle-meta">${t.vehicle_type} // ${t.team}</span>
+            <span class="${callsignClass}">${t.vehicle_id.toUpperCase()}</span>
+            <span class="vehicle-meta">${t.team.toUpperCase()} TEAM // ${t.vehicle_type}</span>
           </div>
           <div class="telemetry-row">
             <span>STATE: ${t.state}</span>
@@ -250,12 +287,15 @@
       telemetryBodyEl.innerHTML = "";
     }
 
+    const isRed = t.team === "red";
+    const teamBadge = isRed ? `<span class="badge badge-danger">RED</span>` : `<span class="badge badge-info">BLUE</span>`;
+
     const row = document.createElement("tr");
     row.innerHTML = `
       <td>${timeStr}</td>
       <td><span class="badge badge-info">${h.classification}</span></td>
       <td>${h.origin_enclave}</td>
-      <td><strong>${t.vehicle_id.toUpperCase()}</strong></td>
+      <td>${teamBadge} <strong>${t.vehicle_id.toUpperCase()}</strong></td>
       <td>${t.state}</td>
       <td>${t.battery_pct.toFixed(1)}%</td>
       <td>${t.coordinates.lat.toFixed(2)}, ${t.coordinates.lon.toFixed(2)}</td>
@@ -307,6 +347,11 @@
     const vehicle = document.getElementById("cmd-vehicle").value;
     const cmdType = document.getElementById("cmd-type").value;
 
+    if (!vehicle) {
+      cmdFeedbackEl.textContent = "Please select a target vehicle.";
+      return;
+    }
+
     cmdFeedbackEl.textContent = `Dispatching ${cmdType} to ${vehicle}...`;
 
     try {
@@ -322,7 +367,7 @@
 
       const data = await resp.json();
       if (resp.ok) {
-        cmdFeedbackEl.textContent = `SUCCESS: Dispatched ${cmdType} (${data.command_id.substring(0, 10)})`;
+        cmdFeedbackEl.textContent = `SUCCESS: Dispatched ${cmdType} to ${vehicle.toUpperCase()}`;
       } else {
         cmdFeedbackEl.textContent = `FAILED: ${data.error || "Unknown error"}`;
       }

@@ -2,14 +2,21 @@
 name: zenoh-mesh-ops
 description: >-
   Manages Eclipse Zenoh mesh routing, topic key expressions, router configurations,
-  REST/SSE plugin debugging, and connectivity between Edge, GCS, and Cloud nodes.
-  Use this skill when modifying Zenoh configs, troubleshooting inter-node communication,
-  or testing Zenoh pub/sub and query primitives.
+  Data Mule buffering, Starlink backhaul, and REST/SSE plugin debugging. Use this
+  skill when modifying Zenoh configs, troubleshooting inter-node communication, or
+  testing Zenoh pub/sub and query primitives.
 ---
 
 # Eclipse Zenoh Mesh Operations Skill
 
 This skill provides configuration guidelines and diagnostic workflows for the Eclipse Zenoh protocol layer in Blue Polar Bear.
+
+## Tactical Architecture & Backhaul
+
+1. **Autonomous Edge Mesh (Local RF):** Drones publish telemetry over local tactical RF / Wi-Fi to a local Zenoh router.
+2. **Tactical Data Mule (Field GCS):** Buffers, stores, and validates packets in disconnected DDIL conditions.
+3. **Starlink Satellite Backhaul:** Replicates sanitized packets across satellite backhaul to the cloud relay (`relay.platformstaq.com`).
+4. **Hybrid Ingestion:** C2 Gateway translates Zenoh streams to standard WebSockets and REST APIs for web browsers.
 
 ## Topic Key Expression Standard
 
@@ -19,10 +26,10 @@ sec/<synthetic_tier>/<vehicle_type>/<team>/<unit_id>/<stream_type>
 ```
 
 ### Valid Key Examples:
-* `sec/tier2/drone/blue/bravo/telemetry` (Tactical ingress)
-* `sec/tier1/drone/blue/bravo/telemetry` (Sanitized egress)
-* `sec/tier3/drone/blue/bravo/telemetry` (Sovereign / EW test)
-* `sec/tier2/drone/blue/bravo/command` (C2 flight instruction)
+* `sec/tier2/drone/blue/blue-alpha/telemetry` (Tactical ingress)
+* `sec/tier1/drone/blue/blue-alpha/telemetry` (Sanitized egress)
+* `sec/tier2/drone/red/red-1/telemetry` (Adversary track)
+* `sec/tier2/drone/blue/blue-alpha/command` (C2 flight instruction)
 
 ## Operational Procedures
 
@@ -44,27 +51,17 @@ Query all active telemetry matching a wildcard selector:
 curl -s "http://127.0.0.1:8000/sec/tier1/**" | jq .
 
 # Query specific drone state
-curl -s "http://127.0.0.1:8000/sec/tier1/drone/blue/bravo/telemetry" | jq .
+curl -s "http://127.0.0.1:8000/sec/tier1/drone/blue/blue-alpha/telemetry" | jq .
 ```
 
-### 3. Publishing Test Payloads via Zenoh REST
-
-Publish a simulated telemetry envelope using HTTP PUT:
-```bash
-curl -X PUT \
-  -H "Content-Type: application/json" \
-  -d '{"header":{"classification":"TIER-1: PUBLIC","origin_enclave":"test-gcs","timestamp_ns":1789751633000000000,"message_id":"msg-test","digest":"abc"},"telemetry":{"vehicle_id":"test-01","vehicle_type":"drone","team":"blue","state":"AIRBORNE","battery_pct":90.0,"coordinates":{"lat":37.77,"lon":-122.42,"alt_m":100},"velocity":{"speed_mps":10},"sequence":1}}' \
-  "http://127.0.0.1:8000/sec/tier1/drone/blue/test-01/telemetry"
-```
-
-### 4. Streaming Real-Time Telemetry via SSE
+### 3. Streaming Real-Time Telemetry via SSE
 
 Subscribe to live telemetry streams using Server-Sent Events (SSE):
 ```bash
 curl -N -H "Accept: text/event-stream" "http://127.0.0.1:8000/sec/**"
 ```
 
-### 5. Zenoh Admin Space Inspection
+### 4. Zenoh Admin Space Inspection
 
 Inspect active storages, routers, and connected peers:
 ```bash
