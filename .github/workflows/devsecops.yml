@@ -200,6 +200,7 @@ jobs:
       - name: Download all SBOMs
         uses: actions/download-artifact@v4
         with:
+          pattern: 'sbom-*'
           path: release-sboms/
           merge-multiple: true
 
