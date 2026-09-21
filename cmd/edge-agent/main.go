@@ -19,22 +19,22 @@ import (
 
 // VehicleSim encapsulates simulated flight dynamics and vehicle state.
 type VehicleSim struct {
-	mu           sync.RWMutex
-	id           string
-	vehicleType  string
-	team         string
-	state        string
-	batteryPct   float64
-	centerLat    float64
-	centerLon    float64
-	currentAlt   float64
-	speedMps     float64
-	headingDeg   float64
-	flightAngle  float64
-	orbitRadius  float64
-	sequence     uint64
-	originNode   string
-	ewActive     bool // Simulated electronic warfare / sovereign payload
+	mu          sync.RWMutex
+	id          string
+	vehicleType string
+	team        string
+	state       string
+	batteryPct  float64
+	centerLat   float64
+	centerLon   float64
+	currentAlt  float64
+	speedMps    float64
+	headingDeg  float64
+	flightAngle float64
+	orbitRadius float64
+	sequence    uint64
+	originNode  string
+	ewActive    bool // Simulated electronic warfare / sovereign payload
 }
 
 func NewVehicleSim(id, vType, team string, lat, lon float64, alt, radius, speed float64) *VehicleSim {

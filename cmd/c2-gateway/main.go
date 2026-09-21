@@ -27,7 +27,7 @@ var upgrader = websocket.Upgrader{
 // VehicleState holds the latest telemetry and breadcrumb history for an asset.
 type VehicleState struct {
 	Telemetry   schema.TelemetryPayload `json:"telemetry"`
-	Header      schema.SecurityHeader    `json:"header"`
+	Header      schema.SecurityHeader   `json:"header"`
 	LastSeen    time.Time               `json:"last_seen"`
 	TrackPoints []schema.Coordinates    `json:"track_points"`
 }
@@ -97,14 +97,22 @@ type Gateway struct {
 	fleetMu     sync.RWMutex
 	fleet       map[string]*VehicleState
 	cdsProxyURL string
+	mule        *zenohutil.DataMule
 }
 
-func NewGateway(bus zenohutil.Bus, cdsProxyURL string) *Gateway {
+func NewGateway(bus zenohutil.Bus, cdsProxyURL string, muleOptional ...*zenohutil.DataMule) *Gateway {
+	var mule *zenohutil.DataMule
+	if len(muleOptional) > 0 && muleOptional[0] != nil {
+		mule = muleOptional[0]
+	} else {
+		mule, _ = zenohutil.NewDataMule("logs/data-mule-spool.jsonl", 5000, "relay.platformstaq.com", bus)
+	}
 	return &Gateway{
 		bus:         bus,
 		hub:         newHub(),
 		fleet:       make(map[string]*VehicleState),
 		cdsProxyURL: cdsProxyURL,
+		mule:        mule,
 	}
 }
 
@@ -112,6 +120,11 @@ func (g *Gateway) handleTelemetry(key string, payload []byte) {
 	env, err := zenohutil.ParseJSONEnvelope(payload)
 	if err != nil || env.Telemetry == nil {
 		return
+	}
+
+	// Ingest into Tactical Data Mule (spools if Starlink backhaul is offline/DDIL)
+	if g.mule != nil {
+		_ = g.mule.Ingest(context.Background(), key, payload)
 	}
 
 	g.fleetMu.Lock()
@@ -145,6 +158,36 @@ func (g *Gateway) handleFleet(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(g.fleet)
+}
+
+func (g *Gateway) handleBackhaul(w http.ResponseWriter, r *http.Request) {
+	if g.mule == nil {
+		http.Error(w, "data mule not configured", http.StatusServiceUnavailable)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(g.mule.Metrics())
+}
+
+func (g *Gateway) handleBackhaulSimulate(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if g.mule == nil {
+		http.Error(w, "data mule not configured", http.StatusServiceUnavailable)
+		return
+	}
+	var req struct {
+		DDILActive bool `json:"ddil_active"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, fmt.Sprintf("invalid json: %v", err), http.StatusBadRequest)
+		return
+	}
+	metrics := g.mule.SetSimulationMode(r.Context(), req.DDILActive)
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(metrics)
 }
 
 func (g *Gateway) handleCommand(w http.ResponseWriter, r *http.Request) {
@@ -230,12 +273,20 @@ func (g *Gateway) handleWS(w http.ResponseWriter, r *http.Request) {
 	}()
 }
 
+// BackhaulWSMessage is broadcast to operator dashboards over WebSocket.
+type BackhaulWSMessage struct {
+	Type    string                    `json:"type"`
+	Metrics zenohutil.BackhaulMetrics `json:"metrics"`
+}
+
 func main() {
 	routerURL := flag.String("router", "http://127.0.0.1:8000", "Zenoh REST router URL")
 	port := flag.Int("port", 8080, "Tactical C2 Gateway HTTP/WS port")
 	webDir := flag.String("web-dir", "web", "Directory containing Tactical COP dashboard")
 	cdsProxyURL := flag.String("cds-url", "http://127.0.0.1:8081", "CDS Guard URL for DLQ records")
 	mockBus := flag.Bool("mock", false, "Use in-memory bus rather than live Zenoh router")
+	spoolFile := flag.String("spool-file", "logs/data-mule-spool.jsonl", "Data mule spool file path for DDIL queueing")
+	cloudTarget := flag.String("cloud-target", "relay.platformstaq.com", "Upstream cloud relay domain")
 	flag.Parse()
 
 	log.Printf("Starting Blue Polar Bear Tactical C2 Gateway on port %d...", *port)
@@ -253,13 +304,40 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	gw := NewGateway(bus, *cdsProxyURL)
+	mule, err := zenohutil.NewDataMule(*spoolFile, 5000, *cloudTarget, bus)
+	if err != nil {
+		log.Printf("[DATA MULE] Warning: initializing data mule: %v", err)
+	}
+
+	gw := NewGateway(bus, *cdsProxyURL, mule)
 	go gw.hub.run(ctx)
+
+	// Broadcast satellite link metrics to dashboards every 2 seconds
+	go func() {
+		ticker := time.NewTicker(2 * time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				if gw.mule != nil {
+					msg, err := json.Marshal(BackhaulWSMessage{
+						Type:    "backhaul_status",
+						Metrics: gw.mule.Metrics(),
+					})
+					if err == nil {
+						gw.hub.broadcast <- msg
+					}
+				}
+			}
+		}
+	}()
 
 	// Subscribe to sanitized egress telemetry
 	telemetrySelector := "sec/tier1/**"
 	log.Printf("Subscribing to sanitized egress stream: %s", telemetrySelector)
-	err := bus.Subscribe(ctx, telemetrySelector, func(key string, payload []byte) {
+	err = bus.Subscribe(ctx, telemetrySelector, func(key string, payload []byte) {
 		gw.handleTelemetry(key, payload)
 	})
 	if err != nil {
@@ -269,6 +347,8 @@ func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v1/fleet", gw.handleFleet)
 	mux.HandleFunc("/api/v1/command", gw.handleCommand)
+	mux.HandleFunc("/api/v1/backhaul", gw.handleBackhaul)
+	mux.HandleFunc("/api/v1/backhaul/simulate", gw.handleBackhaulSimulate)
 	mux.HandleFunc("/ws/telemetry", gw.handleWS)
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -300,5 +380,8 @@ func main() {
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer shutdownCancel()
 	_ = server.Shutdown(shutdownCtx)
+	if gw.mule != nil {
+		_ = gw.mule.Close()
+	}
 	log.Printf("C2 Gateway stopped gracefully.")
 }

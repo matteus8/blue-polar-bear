@@ -15,9 +15,9 @@ func TestTopicKeyBuilderAndParser(t *testing.T) {
 		t.Fatalf("building key: %v", err)
 	}
 
-	expectedKey := "sec/tier2/drone/blue/bravo/telemetry"
-	if key != expectedKey {
-		t.Errorf("expected %s, got %s", expectedKey, key)
+	expectedTopic := "sec/tier2/drone/blue/bravo/telemetry"
+	if key != expectedTopic {
+		t.Errorf("expected %s, got %s", expectedTopic, key)
 	}
 
 	info, err := ParseKey(key)

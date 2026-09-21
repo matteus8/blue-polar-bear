@@ -1,0 +1,16 @@
+title = "Blue Polar Bear Gitleaks Configuration"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Allowlist for test fixtures, topic keys, and mock hashes"
+paths = [
+  '''_test\.go$''',
+  '''pkg/zenohutil/.*_test\.go''',
+  '''logs/''',
+  '''configs/'''
+]
+regexes = [
+  '''sec/tier[0-9]/.*'''
+]

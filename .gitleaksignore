@@ -1,0 +1,2 @@
+# Gitleaks ignore list for historical commits with false positive variable naming
+3013a1504df9ac175c9e2fbad32a629e21932943:pkg/zenohutil/topic_test.go:generic-api-key:18

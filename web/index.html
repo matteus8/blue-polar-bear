@@ -38,6 +38,14 @@
           <span>Telemetry Stream:</span>
           <span class="badge badge-info" id="ws-status">CONNECTING...</span>
         </div>
+        <div class="status-row">
+          <span>Starlink Backhaul:</span>
+          <span class="badge badge-success" id="backhaul-status">ONLINE (STARLINK)</span>
+        </div>
+        <div class="status-row">
+          <span>Data Mule Spool:</span>
+          <span class="badge badge-info" id="spool-status">0 PACKETS</span>
+        </div>
       </div>
 
       <!-- FLEET LIST -->
@@ -96,6 +104,26 @@
           </div>
         </div>
       </section>
+
+      <!-- STARLINK DDIL SATELLITE SIMULATOR -->
+      <section class="section">
+        <div class="section-header">
+          <h3>STARLINK SATELLITE BACKHAUL</h3>
+        </div>
+        <div class="backhaul-panel">
+          <p class="injector-desc">Simulate Tactical DDIL satellite dropout & autonomous Data Mule store-and-forward queueing.</p>
+          <div class="button-stack">
+            <button class="btn btn-warning" id="btn-toggle-ddil">SIMULATE SATELLITE BLACKOUT (DDIL)</button>
+            <button class="btn btn-success" id="btn-restore-link" style="display:none;">RESTORE SATELLITE LINK (FLUSH)</button>
+          </div>
+          <div class="backhaul-metrics-box" id="backhaul-stats">
+            <div class="metric-row"><span>Relay:</span> <span id="mule-cloud-target" class="mono">relay.platformstaq.com</span></div>
+            <div class="metric-row"><span>Latency:</span> <span id="mule-latency" class="mono">38 ms</span></div>
+            <div class="metric-row"><span>Synced Total:</span> <span id="mule-synced" class="mono">0</span></div>
+            <div class="metric-row"><span>Disk Spool:</span> <span id="mule-spool-bytes" class="mono">0 B</span></div>
+          </div>
+        </div>
+      </section>
     </aside>
 
     <!-- MAIN CONTENT AREA -->
@@ -116,6 +144,10 @@
           <div class="hud-item">
             <span class="hud-label">ACTIVE TRACKS</span>
             <span class="hud-value" id="hud-tracks">0</span>
+          </div>
+          <div class="hud-item">
+            <span class="hud-label">STARLINK BACKHAUL</span>
+            <span class="hud-value" id="hud-backhaul">ONLINE (38ms)</span>
           </div>
           <div class="hud-item">
             <span class="hud-label">CDS COARSENING</span>

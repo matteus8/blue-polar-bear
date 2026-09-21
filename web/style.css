@@ -414,6 +414,16 @@ select:focus {
   background-color: #F8E2E0;
 }
 
+.btn-success {
+  background-color: var(--status-green-bg);
+  color: var(--status-green);
+  border: 1px solid #C1DEC9;
+}
+
+.btn-success:hover {
+  background-color: #DAEEDF;
+}
+
 .btn-warning {
   background-color: var(--status-amber-bg);
   color: var(--status-amber);
@@ -463,6 +473,41 @@ select:focus {
   display: flex;
   flex-direction: column;
   gap: 0.45rem;
+}
+
+.backhaul-panel {
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 0.85rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.03);
+}
+
+.backhaul-metrics-box {
+  background-color: var(--bg-primary);
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  padding: 0.6rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-size: 0.73rem;
+}
+
+.metric-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: var(--text-secondary);
+}
+
+.mono {
+  font-family: var(--font-mono);
+  color: var(--text-primary);
+  font-weight: 600;
 }
 
 /* MAIN CONTENT */
