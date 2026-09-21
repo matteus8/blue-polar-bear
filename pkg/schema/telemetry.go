@@ -236,6 +236,10 @@ func (env *SecurityEnvelope) Validate() error {
 		if env.Telemetry.BatteryPct < 0.0 || env.Telemetry.BatteryPct > 100.0 {
 			return fmt.Errorf("invalid battery percentage: %.2f", env.Telemetry.BatteryPct)
 		}
+		if env.Telemetry.Coordinates.Latitude < -90.0 || env.Telemetry.Coordinates.Latitude > 90.0 ||
+			env.Telemetry.Coordinates.Longitude < -180.0 || env.Telemetry.Coordinates.Longitude > 180.0 {
+			return fmt.Errorf("coordinates out of bounds: lat=%.2f lon=%.2f", env.Telemetry.Coordinates.Latitude, env.Telemetry.Coordinates.Longitude)
+		}
 		expectedDigest, err = ComputePayloadDigest(env.Telemetry)
 	} else {
 		if env.Command.CommandID == "" {

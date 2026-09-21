@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"strings"
 
 	"github.com/mcamacho/edgeCompute/pkg/schema"
 )
@@ -62,7 +63,18 @@ func (pe *PolicyEngine) Evaluate(env *schema.SecurityEnvelope) (EnforcementActio
 
 	// 1. Strict Schema & Cryptographic Integrity Check
 	if err := env.Validate(); err != nil {
-		return ActionQuarantine, ReasonDigestMismatch, fmt.Errorf("integrity check failed: %w", err)
+		reason := ReasonDigestMismatch
+		errStr := err.Error()
+		if strings.Contains(errStr, "unauthorized") {
+			reason = ReasonUnauthorizedTier
+		} else if strings.Contains(errStr, "missing") {
+			reason = ReasonSchemaViolation
+		} else if strings.Contains(errStr, "battery") {
+			reason = ReasonBatteryViolation
+		} else if strings.Contains(errStr, "coordinates out of bounds") {
+			reason = ReasonInvalidCoordinates
+		}
+		return ActionQuarantine, reason, fmt.Errorf("integrity check failed: %w", err)
 	}
 
 	// 2. Enforce Synthetic Tier Egress Rules

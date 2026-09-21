@@ -7,9 +7,11 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/gorilla/websocket"
 	"github.com/mcamacho/edgeCompute/pkg/schema"
 	"github.com/mcamacho/edgeCompute/pkg/zenohutil"
 )
@@ -193,5 +195,110 @@ func TestGateway_BackhaulEndpoints(t *testing.T) {
 	}
 	if metrics.SyncedTotal != 1 {
 		t.Errorf("expected 1 synced packet after flush, got %d", metrics.SyncedTotal)
+	}
+}
+
+func TestGateway_InvalidCommands(t *testing.T) {
+	bus := zenohutil.NewMemoryBus()
+	defer bus.Close()
+
+	gw := NewGateway(bus, "http://127.0.0.1:8081", nil)
+
+	// 1. Invalid method (GET instead of POST)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/command", nil)
+	w := httptest.NewRecorder()
+	gw.handleCommand(w, req)
+	if w.Code != http.StatusMethodNotAllowed {
+		t.Errorf("expected 405, got %d", w.Code)
+	}
+
+	// 2. Malformed JSON
+	req = httptest.NewRequest(http.MethodPost, "/api/v1/command", bytes.NewReader([]byte("{invalid-json")))
+	w = httptest.NewRecorder()
+	gw.handleCommand(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("expected 400 for malformed JSON, got %d", w.Code)
+	}
+
+	// 3. Missing target_vehicle
+	req = httptest.NewRequest(http.MethodPost, "/api/v1/command", bytes.NewReader([]byte(`{"command_type":"HOVER"}`)))
+	w = httptest.NewRecorder()
+	gw.handleCommand(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("expected 400 for missing target_vehicle, got %d", w.Code)
+	}
+
+	// 4. Missing command_type
+	req = httptest.NewRequest(http.MethodPost, "/api/v1/command", bytes.NewReader([]byte(`{"target_vehicle":"alpha"}`)))
+	w = httptest.NewRecorder()
+	gw.handleCommand(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("expected 400 for missing command_type, got %d", w.Code)
+	}
+
+	// 5. Backhaul simulate invalid method
+	req = httptest.NewRequest(http.MethodGet, "/api/v1/backhaul/simulate", nil)
+	w = httptest.NewRecorder()
+	gw.handleBackhaulSimulate(w, req)
+	if w.Code != http.StatusMethodNotAllowed {
+		t.Errorf("expected 405 for GET on simulate, got %d", w.Code)
+	}
+}
+
+func TestGateway_WebSocketStreaming(t *testing.T) {
+	bus := zenohutil.NewMemoryBus()
+	defer bus.Close()
+
+	gw := NewGateway(bus, "http://127.0.0.1:8081", nil)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go gw.hub.run(ctx)
+
+	server := httptest.NewServer(http.HandlerFunc(gw.handleWS))
+	defer server.Close()
+
+	// Connect WebSocket client
+	wsURL := "ws" + strings.TrimPrefix(server.URL, "http")
+	ws, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	if err != nil {
+		t.Fatalf("dialing websocket: %v", err)
+	}
+	defer ws.Close()
+
+	// Wait for registration
+	time.Sleep(50 * time.Millisecond)
+
+	// Send telemetry
+	telem := schema.TelemetryPayload{
+		VehicleID:   "delta",
+		VehicleType: "drone",
+		Team:        "blue",
+		State:       "AIRBORNE",
+		BatteryPct:  88.0,
+		Coordinates: schema.Coordinates{Latitude: 31.65, Longitude: -8.01, AltitudeM: 110},
+		Sequence:    1,
+	}
+	env, err := schema.NewTelemetryEnvelope(schema.Tier1Public, "cds-sanitized", telem, nil)
+	if err != nil {
+		t.Fatalf("creating envelope: %v", err)
+	}
+	envBytes, _ := json.Marshal(env)
+
+	gw.handleTelemetry("sec/tier1/drone/blue/delta/telemetry", envBytes)
+
+	// Read message from websocket
+	_ = ws.SetReadDeadline(time.Now().Add(2 * time.Second))
+	_, msg, err := ws.ReadMessage()
+	if err != nil {
+		t.Fatalf("reading from websocket: %v", err)
+	}
+
+	receivedEnv, err := zenohutil.ParseJSONEnvelope(msg)
+	if err != nil {
+		t.Fatalf("parsing received WS message: %v", err)
+	}
+	if receivedEnv.Telemetry.VehicleID != "delta" {
+		t.Errorf("expected vehicle delta, got %s", receivedEnv.Telemetry.VehicleID)
 	}
 }
