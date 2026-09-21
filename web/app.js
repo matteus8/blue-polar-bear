@@ -18,6 +18,15 @@
   const dlqBodyEl = document.getElementById("dlq-log-body");
   const cmdFeedbackEl = document.getElementById("command-feedback");
   const cmdVehicleSelect = document.getElementById("cmd-vehicle");
+  const backhaulStatusEl = document.getElementById("backhaul-status");
+  const spoolStatusEl = document.getElementById("spool-status");
+  const hudBackhaulEl = document.getElementById("hud-backhaul");
+  const btnToggleDDIL = document.getElementById("btn-toggle-ddil");
+  const btnRestoreLink = document.getElementById("btn-restore-link");
+  const muleCloudTargetEl = document.getElementById("mule-cloud-target");
+  const muleLatencyEl = document.getElementById("mule-latency");
+  const muleSyncedEl = document.getElementById("mule-synced");
+  const muleSpoolBytesEl = document.getElementById("mule-spool-bytes");
 
   // Tab switching
   document.querySelectorAll(".tab-btn").forEach(btn => {
@@ -118,6 +127,8 @@
         const envelope = JSON.parse(event.data);
         if (envelope && envelope.telemetry) {
           handleIncomingTelemetry(envelope);
+        } else if (envelope && envelope.type === "backhaul_status" && envelope.metrics) {
+          updateBackhaulUI(envelope.metrics);
         }
       } catch (err) {
         console.error("WS Parse Error:", err);
@@ -399,10 +410,96 @@
     cmdFeedbackEl.textContent = `Injected: ${note}`;
   }
 
+  // Update Starlink Backhaul & Data Mule UI
+  function updateBackhaulUI(m) {
+    if (!m) return;
+    if (m.status === "ONLINE") {
+      if (backhaulStatusEl) {
+        backhaulStatusEl.textContent = "ONLINE (STARLINK)";
+        backhaulStatusEl.className = "badge badge-success";
+      }
+      if (hudBackhaulEl) {
+        hudBackhaulEl.textContent = `ONLINE (${m.latency_ms}ms)`;
+        hudBackhaulEl.style.color = "var(--status-green)";
+      }
+      if (btnToggleDDIL) btnToggleDDIL.style.display = "block";
+      if (btnRestoreLink) btnRestoreLink.style.display = "none";
+    } else {
+      if (backhaulStatusEl) {
+        backhaulStatusEl.textContent = "DDIL BUFFERING";
+        backhaulStatusEl.className = "badge badge-warning";
+      }
+      if (hudBackhaulEl) {
+        hudBackhaulEl.textContent = "DDIL OUTAGE (BUFFERING)";
+        hudBackhaulEl.style.color = "var(--status-amber)";
+      }
+      if (btnToggleDDIL) btnToggleDDIL.style.display = "none";
+      if (btnRestoreLink) btnRestoreLink.style.display = "block";
+    }
+
+    if (spoolStatusEl) {
+      spoolStatusEl.textContent = `${m.spooled_packets} PACKETS`;
+      spoolStatusEl.className = m.spooled_packets > 0 ? "badge badge-warning" : "badge badge-info";
+    }
+    if (muleCloudTargetEl) muleCloudTargetEl.textContent = m.cloud_target || "relay.platformstaq.com";
+    if (muleLatencyEl) muleLatencyEl.textContent = `${m.latency_ms} ms`;
+    if (muleSyncedEl) muleSyncedEl.textContent = `${m.synced_total}`;
+    if (muleSpoolBytesEl) {
+      const bytes = m.spooled_bytes || 0;
+      if (bytes < 1024) {
+        muleSpoolBytesEl.textContent = `${bytes} B`;
+      } else {
+        muleSpoolBytesEl.textContent = `${(bytes / 1024).toFixed(1)} KB`;
+      }
+    }
+  }
+
+  // Simulate Backhaul DDIL Disconnect / Reconnect
+  async function simulateBackhaul(ddilActive) {
+    try {
+      const resp = await fetch("/api/v1/backhaul/simulate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ddil_active: ddilActive })
+      });
+      if (resp.ok) {
+        const metrics = await resp.json();
+        updateBackhaulUI(metrics);
+        cmdFeedbackEl.textContent = ddilActive
+          ? "TACTICAL DDIL ACTIVE: Satellite backhaul dropped. Telemetry is buffering to local Data Mule."
+          : "SATELLITE BACKHAUL RESTORED: Tactical Data Mule flushed spooled packets upstream.";
+      }
+    } catch (e) {
+      console.warn("Backhaul simulation error:", e);
+    }
+  }
+
+  if (btnToggleDDIL) {
+    btnToggleDDIL.addEventListener("click", () => simulateBackhaul(true));
+  }
+  if (btnRestoreLink) {
+    btnRestoreLink.addEventListener("click", () => simulateBackhaul(false));
+  }
+
+  // Fallback Polling for Backhaul Status
+  async function pollBackhaul() {
+    try {
+      const resp = await fetch("/api/v1/backhaul");
+      if (resp.ok) {
+        const metrics = await resp.json();
+        updateBackhaulUI(metrics);
+      }
+    } catch (e) {
+      // Ignore during initial boot
+    }
+    setTimeout(pollBackhaul, 3000);
+  }
+
   // Initialization
   window.addEventListener("DOMContentLoaded", () => {
     initMap();
     connectWebSocket();
     pollDLQ();
+    pollBackhaul();
   });
 })();

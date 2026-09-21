@@ -29,12 +29,14 @@ services:
       context: .
       dockerfile: deploy/Dockerfile.c2-gateway
     container_name: bp-c2-gateway
-    command: ["-router", "http://zenoh-gcs:8000", "-port", "8080", "-cds-url", "http://cds-guard:8081"]
+    command: ["-router", "http://zenoh-gcs:8000", "-port", "8080", "-cds-url", "http://cds-guard:8081", "-spool-file", "/logs/data-mule-spool.jsonl"]
     depends_on:
       - zenoh-gcs
       - cds-guard
     ports:
       - "8080:8080"       # Tactical COP UI & WebSocket
+    volumes:
+      - ./logs:/logs
     restart: unless-stopped
 
   edge-swarm:

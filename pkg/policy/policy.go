@@ -21,15 +21,15 @@ const (
 type CDSRejectionReason string
 
 const (
-	ReasonMalformedJSON           CDSRejectionReason = "MALFORMED_JSON_PAYLOAD"
-	ReasonSchemaViolation         CDSRejectionReason = "SCHEMA_VALIDATION_FAILURE"
-	ReasonDigestMismatch          CDSRejectionReason = "CRYPTOGRAPHIC_INTEGRITY_COMPROMISED"
-	ReasonUnauthorizedTier        CDSRejectionReason = "UNAUTHORIZED_SYNTHETIC_TIER"
-	ReasonTier3EgressProhibited   CDSRejectionReason = "TIER3_CRITICAL_EGRESS_PROHIBITED"
-	ReasonInvalidCoordinates      CDSRejectionReason = "COORDINATES_OUT_OF_BOUNDS"
-	ReasonBatteryViolation        CDSRejectionReason = "INVALID_BATTERY_LEVEL"
-	ReasonMissingSecurityHeader   CDSRejectionReason = "MISSING_SECURITY_HEADER"
-	ReasonUnknownPolicyViolation  CDSRejectionReason = "POLICY_VIOLATION_UNKNOWN"
+	ReasonMalformedJSON          CDSRejectionReason = "MALFORMED_JSON_PAYLOAD"
+	ReasonSchemaViolation        CDSRejectionReason = "SCHEMA_VALIDATION_FAILURE"
+	ReasonDigestMismatch         CDSRejectionReason = "CRYPTOGRAPHIC_INTEGRITY_COMPROMISED"
+	ReasonUnauthorizedTier       CDSRejectionReason = "UNAUTHORIZED_SYNTHETIC_TIER"
+	ReasonTier3EgressProhibited  CDSRejectionReason = "TIER3_CRITICAL_EGRESS_PROHIBITED"
+	ReasonInvalidCoordinates     CDSRejectionReason = "COORDINATES_OUT_OF_BOUNDS"
+	ReasonBatteryViolation       CDSRejectionReason = "INVALID_BATTERY_LEVEL"
+	ReasonMissingSecurityHeader  CDSRejectionReason = "MISSING_SECURITY_HEADER"
+	ReasonUnknownPolicyViolation CDSRejectionReason = "POLICY_VIOLATION_UNKNOWN"
 )
 
 // PolicyEngine evaluates packets against cross-domain boundary rules.
@@ -102,7 +102,7 @@ func (pe *PolicyEngine) RedactAndSanitize(env *schema.SecurityEnvelope) (*schema
 	// 2. Scrub sensitive mission payload
 	if sanitizedTelem.MissionPayload != nil {
 		sanitizedTelem.MissionPayload = map[string]any{
-			"status":   "[REDACTED_BY_CDS]",
+			"status":    "[REDACTED_BY_CDS]",
 			"sanitized": true,
 		}
 	}
