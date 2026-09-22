@@ -601,6 +601,10 @@ select:focus {
   background-color: #FFFFFF !important;
 }
 
+.vehicle-marker {
+  transition: transform 0.45s ease-out;
+}
+
 .canvas-fallback {
   display: none;
   width: 100%;
