@@ -657,9 +657,77 @@ select:focus {
 
 .tab-bar {
   display: flex;
+  justify-content: space-between;
+  align-items: center;
   background-color: #E6E0D4;
   border-bottom: 1px solid var(--border-color);
-  padding: 0 0.5rem;
+  padding: 0 0.75rem;
+}
+
+.tab-buttons {
+  display: flex;
+}
+
+.stream-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.stream-rate-badge {
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: var(--accent-orange);
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  padding: 2px 6px;
+}
+
+.ctrl-btn {
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  padding: 3px 8px;
+  cursor: pointer;
+  transition: background-color 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.ctrl-btn:hover {
+  background-color: var(--bg-card-hover);
+  border-color: #C8BFB0;
+}
+
+.ctrl-btn.active-paused {
+  background-color: var(--status-amber-bg);
+  color: var(--status-amber);
+  border-color: #ECD5B2;
+}
+
+/* LEAFLET DOD LAYER CONTROL */
+.leaflet-control-layers {
+  background: rgba(255, 255, 255, 0.94) !important;
+  backdrop-filter: blur(8px) !important;
+  border: 1px solid var(--border-color) !important;
+  border-radius: 6px !important;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1) !important;
+  font-family: var(--font-mono) !important;
+  font-size: 0.74rem !important;
+  color: var(--text-primary) !important;
+  padding: 6px 10px !important;
+}
+
+.leaflet-control-layers-base label {
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 3px 0;
 }
 
 .tab-btn {

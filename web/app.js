@@ -8,7 +8,10 @@
     polylines: {},
     ws: null,
     enclave: "TIER-1: PUBLIC",
-    fleetFilter: "all"
+    fleetFilter: "all",
+    streamPaused: false,
+    lastLogOverall: 0,
+    lastVehicleState: {}
   };
 
   // DOM Elements
@@ -28,6 +31,39 @@
   const muleLatencyEl = document.getElementById("mule-latency");
   const muleSyncedEl = document.getElementById("mule-synced");
   const muleSpoolBytesEl = document.getElementById("mule-spool-bytes");
+  const btnToggleStream = document.getElementById("btn-toggle-stream");
+  const btnClearStream = document.getElementById("btn-clear-stream");
+  const streamRateBadge = document.getElementById("stream-rate-badge");
+
+  // Telemetry stream controls (Pause / Resume & Clear)
+  if (btnToggleStream) {
+    btnToggleStream.addEventListener("click", () => {
+      state.streamPaused = !state.streamPaused;
+      if (state.streamPaused) {
+        btnToggleStream.textContent = "▶ RESUME";
+        btnToggleStream.classList.add("active-paused");
+        if (streamRateBadge) {
+          streamRateBadge.textContent = "PAUSED";
+          streamRateBadge.style.color = "var(--status-amber)";
+        }
+      } else {
+        btnToggleStream.textContent = "⏸ PAUSE";
+        btnToggleStream.classList.remove("active-paused");
+        if (streamRateBadge) {
+          streamRateBadge.textContent = "CALM (1 Hz)";
+          streamRateBadge.style.color = "var(--accent-orange)";
+        }
+      }
+    });
+  }
+
+  if (btnClearStream) {
+    btnClearStream.addEventListener("click", () => {
+      if (telemetryBodyEl) {
+        telemetryBodyEl.innerHTML = `<tr><td colspan="9" class="empty-cell">Ingress log cleared. Awaiting new telemetry...</td></tr>`;
+      }
+    });
+  }
 
   // Fleet filter switching
   document.querySelectorAll(".filter-btn").forEach(btn => {
@@ -51,15 +87,32 @@
     });
   });
 
-  // Initialize Map
+  // Initialize Map with DoD & ATAK standard Esri Satellite Recon & Tactical Topo
   function initMap() {
     if (typeof L !== "undefined") {
       try {
-        state.map = L.map("map").setView([31.6500, -8.0100], 12);
-        L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", {
-          attribution: '&copy; CartoDB &copy; OpenStreetMap',
+        const esriSatellite = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", {
+          attribution: 'Tiles &copy; Esri &mdash; Source: Esri, Maxar, Earthstar Geographics, USDA, USGS',
           maxZoom: 19
-        }).addTo(state.map);
+        });
+
+        const esriTopo = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}", {
+          attribution: 'Tiles &copy; Esri &mdash; USGS, DeLorme, TomTom, FAO, NPS',
+          maxZoom: 19
+        });
+
+        state.map = L.map("map", {
+          center: [31.6500, -8.0100],
+          zoom: 12,
+          layers: [esriSatellite]
+        });
+
+        const baseMaps = {
+          "Satellite Recon (Esri)": esriSatellite,
+          "Tactical Topo (Esri)": esriTopo
+        };
+
+        L.control.layers(baseMaps, null, { position: "topright" }).addTo(state.map);
         return;
       } catch (e) {
         console.warn("Leaflet tile error, using canvas fallback", e);
@@ -365,10 +418,29 @@
     }).join("");
   }
 
-  // Append Telemetry Log Row
+  // Append Telemetry Log Row with Smart Calming & Rate Throttling
   function appendTelemetryRow(env) {
+    if (state.streamPaused || !telemetryBodyEl) return;
+
     const t = env.telemetry;
     const h = env.header;
+    const vID = t.vehicle_id;
+    const now = Date.now();
+
+    // Check if this is a high-priority event (State Transition or Low Battery)
+    const prevState = state.lastVehicleState[vID];
+    const isStateChange = prevState && prevState !== t.state;
+    state.lastVehicleState[vID] = t.state;
+    const isLowBatt = t.battery_pct < 20;
+
+    // Routine cruise telemetry is throttled to a calm 1 Hz rate limit overall
+    if (!isStateChange && !isLowBatt) {
+      if (now - state.lastLogOverall < 1000) {
+        return;
+      }
+    }
+    state.lastLogOverall = now;
+
     const timeStr = new Date().toLocaleTimeString();
 
     if (telemetryBodyEl.querySelector(".empty-cell")) {
@@ -378,21 +450,31 @@
     const isRed = t.team === "red";
     const teamBadge = isRed ? `<span class="badge badge-red">RED</span>` : `<span class="badge badge-blue">BLUE</span>`;
 
+    let stateBadge = t.state;
+    if (isStateChange) {
+      stateBadge = `<span class="badge badge-warning" title="State Transitioned">${t.state}</span>`;
+    }
+
+    let battBadge = `${t.battery_pct.toFixed(1)}%`;
+    if (isLowBatt) {
+      battBadge = `<span class="badge badge-danger">${t.battery_pct.toFixed(0)}%</span>`;
+    }
+
     const row = document.createElement("tr");
     row.innerHTML = `
       <td>${timeStr}</td>
       <td><span class="badge badge-info">${h.classification}</span></td>
       <td>${h.origin_enclave}</td>
       <td>${teamBadge} <strong>${t.vehicle_id.toUpperCase()}</strong></td>
-      <td>${t.state}</td>
-      <td>${t.battery_pct.toFixed(1)}%</td>
+      <td>${stateBadge}</td>
+      <td>${battBadge}</td>
       <td>${t.coordinates.lat.toFixed(2)}, ${t.coordinates.lon.toFixed(2)}</td>
       <td>${t.coordinates.alt_m.toFixed(0)}m</td>
       <td title="${h.digest}">${h.digest.substring(0, 8)}...</td>
     `;
 
     telemetryBodyEl.prepend(row);
-    while (telemetryBodyEl.children.length > 50) {
+    while (telemetryBodyEl.children.length > 25) {
       telemetryBodyEl.removeChild(telemetryBodyEl.lastChild);
     }
   }
