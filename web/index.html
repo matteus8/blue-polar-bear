@@ -164,8 +164,15 @@
       <!-- BOTTOM MONITORING TABS -->
       <div class="monitoring-deck">
         <div class="tab-bar">
-          <button class="tab-btn active" data-tab="telemetry-log">LIVE TELEMETRY LOG</button>
-          <button class="tab-btn" data-tab="cds-quarantine">CDS DEAD LETTER QUEUE (DLQ)</button>
+          <div class="tab-buttons">
+            <button class="tab-btn active" data-tab="telemetry-log">LIVE TELEMETRY LOG</button>
+            <button class="tab-btn" data-tab="cds-quarantine">CDS DEAD LETTER QUEUE (DLQ)</button>
+          </div>
+          <div class="stream-controls">
+            <span class="stream-rate-badge" id="stream-rate-badge">CALM (1 Hz)</span>
+            <button class="ctrl-btn" id="btn-toggle-stream" title="Pause / Resume Live Ingress Stream">⏸ PAUSE</button>
+            <button class="ctrl-btn" id="btn-clear-stream" title="Clear Ingress Log">CLEAR</button>
+          </div>
         </div>
 
         <div class="tab-content active" id="tab-telemetry-log">
