@@ -232,11 +232,45 @@
       state.fleet[vID].header = env.header;
     }
 
-    // Add track point
+    // Dynamic Enclave Header & HUD Synchronization
+    if (env.header && env.header.classification) {
+      const cls = env.header.classification;
+      if (cls !== state.enclave) {
+        state.enclave = cls;
+        const bannerEl = document.getElementById("banner-classification");
+        const hudEnclaveEl = document.getElementById("hud-enclave");
+        const hudCoarsenEl = document.getElementById("hud-coarsening");
+        
+        if (cls === "TIER-2: RESTRICTED") {
+          if (bannerEl) {
+            bannerEl.className = "classification-banner tier-restricted";
+            const txt = bannerEl.querySelector(".banner-text");
+            if (txt) txt.textContent = "// SIMULATION ONLY // TIER-2: RESTRICTED // TACTICAL ENCLAVE //";
+          }
+          if (hudEnclaveEl) hudEnclaveEl.textContent = "TIER-2: RESTRICTED";
+          if (hudCoarsenEl) hudCoarsenEl.textContent = "TACTICAL HIGH-RES (6 DECIMALS ~0.1m)";
+        } else if (cls === "TIER-1: PUBLIC") {
+          if (bannerEl) {
+            bannerEl.className = "classification-banner tier-public";
+            const txt = bannerEl.querySelector(".banner-text");
+            if (txt) txt.textContent = "// SIMULATION ONLY // TIER-1: PUBLIC // SYNTHETIC ENCLAVE //";
+          }
+          if (hudEnclaveEl) hudEnclaveEl.textContent = "TIER-1: PUBLIC";
+          if (hudCoarsenEl) hudCoarsenEl.textContent = "2 DECIMALS (~1.1 km)";
+        }
+      }
+    }
+
+    // Add track point only if vehicle actually moved (avoid duplicate zero-distance points)
     const coord = [t.coordinates.lat, t.coordinates.lon];
-    state.fleet[vID].tracks.push(coord);
-    if (state.fleet[vID].tracks.length > 50) {
-      state.fleet[vID].tracks.shift();
+    const tracks = state.fleet[vID].tracks;
+    if (tracks.length === 0 || 
+        Math.abs(tracks[tracks.length - 1][0] - coord[0]) > 0.00005 || 
+        Math.abs(tracks[tracks.length - 1][1] - coord[1]) > 0.00005) {
+      tracks.push(coord);
+      if (tracks.length > 30) {
+        tracks.shift();
+      }
     }
 
     updateMapMarker(vID, coord, t);

@@ -287,6 +287,7 @@ func main() {
 	mockBus := flag.Bool("mock", false, "Use in-memory bus rather than live Zenoh router")
 	spoolFile := flag.String("spool-file", "logs/data-mule-spool.jsonl", "Data mule spool file path for DDIL queueing")
 	cloudTarget := flag.String("cloud-target", "relay.platformstaq.com", "Upstream cloud relay domain")
+	telemetrySelector := flag.String("telemetry-selector", "sec/tier2/**", "Zenoh topic selector for telemetry ingestion (e.g. sec/tier2/** for tactical high-res or sec/tier1/** for coarsened)")
 	flag.Parse()
 
 	log.Printf("Starting Blue Polar Bear Tactical C2 Gateway on port %d...", *port)
@@ -334,14 +335,13 @@ func main() {
 		}
 	}()
 
-	// Subscribe to sanitized egress telemetry
-	telemetrySelector := "sec/tier1/**"
-	log.Printf("Subscribing to sanitized egress stream: %s", telemetrySelector)
-	err = bus.Subscribe(ctx, telemetrySelector, func(key string, payload []byte) {
+	// Subscribe to telemetry stream
+	log.Printf("Subscribing to telemetry stream: %s", *telemetrySelector)
+	err = bus.Subscribe(ctx, *telemetrySelector, func(key string, payload []byte) {
 		gw.handleTelemetry(key, payload)
 	})
 	if err != nil {
-		log.Fatalf("subscribing to egress stream: %v", err)
+		log.Fatalf("subscribing to telemetry stream: %v", err)
 	}
 
 	mux := http.NewServeMux()
