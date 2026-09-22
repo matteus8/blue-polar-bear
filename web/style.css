@@ -253,6 +253,41 @@ body {
   text-transform: uppercase;
 }
 
+/* FLEET FILTER BAR */
+.fleet-filter-bar {
+  display: flex;
+  gap: 0.35rem;
+  background-color: var(--bg-tertiary);
+  padding: 3px;
+  border-radius: 6px;
+  border: 1px solid var(--border-color);
+  margin-bottom: 0.2rem;
+}
+
+.filter-btn {
+  flex: 1;
+  padding: 4px 6px;
+  border: none;
+  background: transparent;
+  border-radius: 4px;
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background-color 0.15s, color 0.15s, box-shadow 0.15s;
+}
+
+.filter-btn:hover {
+  color: var(--text-primary);
+}
+
+.filter-btn.active {
+  background-color: var(--bg-card);
+  color: var(--accent-orange);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+}
+
 /* FLEET CARDS */
 .fleet-list {
   display: flex;
@@ -270,6 +305,31 @@ body {
   gap: 0.35rem;
   box-shadow: 0 1px 3px rgba(0,0,0,0.03);
   transition: background-color 0.15s, border-color 0.15s, box-shadow 0.15s;
+}
+
+.fleet-card.low-battery {
+  border-color: #E8BEBC;
+  background-color: #FFF9F9;
+}
+
+.badge-low-battery {
+  background-color: var(--status-red-bg);
+  color: var(--status-red);
+  border: 1px solid #E8BEBC;
+  font-size: 0.62rem;
+  padding: 1px 5px;
+  animation: pulse-low-battery 1.5s infinite ease-in-out;
+}
+
+@keyframes pulse-low-battery {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.6;
+    transform: scale(0.97);
+  }
 }
 
 .fleet-card-blue {

@@ -7,7 +7,8 @@
     markers: {},
     polylines: {},
     ws: null,
-    enclave: "TIER-1: PUBLIC"
+    enclave: "TIER-1: PUBLIC",
+    fleetFilter: "all"
   };
 
   // DOM Elements
@@ -27,6 +28,17 @@
   const muleLatencyEl = document.getElementById("mule-latency");
   const muleSyncedEl = document.getElementById("mule-synced");
   const muleSpoolBytesEl = document.getElementById("mule-spool-bytes");
+
+  // Fleet filter switching
+  document.querySelectorAll(".filter-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      document.querySelectorAll(".filter-btn").forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+      state.fleetFilter = btn.dataset.filter || "all";
+      renderFleetList();
+      syncMarkerVisibility();
+    });
+  });
 
   // Tab switching
   document.querySelectorAll(".tab-btn").forEach(btn => {
@@ -96,6 +108,9 @@
 
     // Draw vehicles on canvas fallback (Morocco Sector)
     Object.values(state.fleet).forEach(v => {
+      if (state.fleetFilter !== "all" && v.telemetry.team !== state.fleetFilter) {
+        return;
+      }
       const isRed = v.telemetry.team === "red";
       const x = (w / 2) + ((v.telemetry.coordinates.lon - (-8.0100)) * 5000);
       const y = (h / 2) - ((v.telemetry.coordinates.lat - 31.6500) * 5000);
@@ -188,6 +203,7 @@
 
     const isRed = t.team === "red";
     const color = isRed ? "#BA4540" : "#326B94";
+    const isLowBatt = t.battery_pct < 20;
 
     if (!state.markers[vID]) {
       const icon = L.divIcon({
@@ -208,6 +224,10 @@
       state.polylines[vID].setLatLngs(state.fleet[vID].tracks);
     }
 
+    const battDisplay = isLowBatt 
+      ? `<span style="color:#BA4540; font-weight:700;">${t.battery_pct.toFixed(1)}% [CRITICAL LOW]</span>`
+      : `${t.battery_pct.toFixed(1)}%`;
+
     state.markers[vID].bindPopup(`
       <div style="font-family: -apple-system, BlinkMacSystemFont, sans-serif; color: #2B2621; font-size: 12px; line-height: 1.5; padding: 2px;">
         <div style="font-weight: 700; color: ${color}; font-size: 13px; margin-bottom: 3px;">
@@ -215,12 +235,36 @@
         </div>
         <div><strong>State:</strong> ${t.state}</div>
         <div><strong>Altitude:</strong> ${t.coordinates.alt_m.toFixed(1)}m | <strong>Speed:</strong> ${t.velocity.speed_mps.toFixed(1)}m/s</div>
-        <div><strong>Battery:</strong> ${t.battery_pct.toFixed(1)}%</div>
+        <div><strong>Battery:</strong> ${battDisplay}</div>
         <div style="font-family: monospace; font-size: 11px; color: #6E655C; margin-top: 3px;">
           ${t.coordinates.lat.toFixed(4)}, ${t.coordinates.lon.toFixed(4)}
         </div>
       </div>
     `);
+
+    // Synchronize visibility with active filter
+    syncMarkerVisibility();
+  }
+
+  // Synchronize Leaflet map markers and polylines with the active fleet filter
+  function syncMarkerVisibility() {
+    if (!state.map) return;
+    Object.entries(state.markers).forEach(([vID, marker]) => {
+      const v = state.fleet[vID];
+      if (!v) return;
+      const isMatch = state.fleetFilter === "all" || v.telemetry.team === state.fleetFilter;
+      if (isMatch) {
+        if (!state.map.hasLayer(marker)) state.map.addLayer(marker);
+        if (state.polylines[vID] && !state.map.hasLayer(state.polylines[vID])) {
+          state.map.addLayer(state.polylines[vID]);
+        }
+      } else {
+        if (state.map.hasLayer(marker)) state.map.removeLayer(marker);
+        if (state.polylines[vID] && state.map.hasLayer(state.polylines[vID])) {
+          state.map.removeLayer(state.polylines[vID]);
+        }
+      }
+    });
   }
 
   // Update C2 Command Target dropdown with all active vehicles
@@ -239,7 +283,7 @@
     }
   }
 
-  // Render Fleet Sidebar with Blue and Red team groupings
+  // Render Fleet Sidebar with Blue and Red team groupings, filter, and low-battery alerts
   function renderFleetList() {
     const vehicles = Object.values(state.fleet);
     const blueCount = vehicles.filter(v => v.telemetry.team === "blue").length;
@@ -248,30 +292,57 @@
     fleetCountEl.textContent = `${vehicles.length}`;
     document.getElementById("hud-tracks").textContent = `BLUE: ${blueCount} | RED: ${redCount} (TOTAL: ${vehicles.length})`;
 
+    // Update filter button counts
+    const btnAll = document.querySelector('.filter-btn[data-filter="all"]');
+    const btnBlue = document.querySelector('.filter-btn[data-filter="blue"]');
+    const btnRed = document.querySelector('.filter-btn[data-filter="red"]');
+    if (btnAll) btnAll.textContent = `ALL (${vehicles.length})`;
+    if (btnBlue) btnBlue.textContent = `BLUE (${blueCount})`;
+    if (btnRed) btnRed.textContent = `RED (${redCount})`;
+
     if (vehicles.length === 0) {
       fleetListEl.innerHTML = `<div class="empty-state">Awaiting vehicle telemetry...</div>`;
       return;
     }
 
+    // Filter displayed vehicles
+    const displayedVehicles = vehicles.filter(v => {
+      if (state.fleetFilter === "blue") return v.telemetry.team === "blue";
+      if (state.fleetFilter === "red") return v.telemetry.team === "red";
+      return true;
+    });
+
+    if (displayedVehicles.length === 0) {
+      fleetListEl.innerHTML = `<div class="empty-state">No vehicles matching '${state.fleetFilter.toUpperCase()}' filter.</div>`;
+      return;
+    }
+
     // Sort: Blue fleet first, then Red fleet
-    vehicles.sort((a, b) => {
+    displayedVehicles.sort((a, b) => {
       if (a.telemetry.team !== b.telemetry.team) {
         return a.telemetry.team === "blue" ? -1 : 1;
       }
       return a.telemetry.vehicle_id.localeCompare(b.telemetry.vehicle_id);
     });
 
-    fleetListEl.innerHTML = vehicles.map(v => {
+    fleetListEl.innerHTML = displayedVehicles.map(v => {
       const t = v.telemetry;
       const h = v.header;
       const isRed = t.team === "red";
+      const isLowBatt = t.battery_pct < 20;
       const teamClass = isRed ? "fleet-card-red" : "fleet-card-blue";
+      const lowBattClass = isLowBatt ? "low-battery" : "";
       const callsignClass = isRed ? "vehicle-callsign-red" : "vehicle-callsign";
       const batColor = t.battery_pct > 50 ? "var(--status-green)" : t.battery_pct > 20 ? "var(--status-amber)" : "var(--status-red)";
+      const lowBattBadge = isLowBatt ? `<span class="badge badge-low-battery">LOW BATT (${t.battery_pct.toFixed(0)}%)</span>` : "";
+
       return `
-        <div class="fleet-card ${teamClass}">
+        <div class="fleet-card ${teamClass} ${lowBattClass}">
           <div class="fleet-card-header">
-            <span class="${callsignClass}">${t.vehicle_id.toUpperCase()}</span>
+            <div style="display:flex; align-items:center; gap:6px;">
+              <span class="${callsignClass}">${t.vehicle_id.toUpperCase()}</span>
+              ${lowBattBadge}
+            </div>
             <span class="vehicle-meta">${t.team.toUpperCase()} TEAM // ${t.vehicle_type}</span>
           </div>
           <div class="telemetry-row">
