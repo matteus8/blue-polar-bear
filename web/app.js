@@ -21,6 +21,7 @@
   const telemetryBodyEl = document.getElementById("telemetry-log-body");
   const dlqBodyEl = document.getElementById("dlq-log-body");
   const cmdFeedbackEl = document.getElementById("command-feedback");
+  const injectorFeedbackEl = document.getElementById("injector-feedback");
   const cmdVehicleSelect = document.getElementById("cmd-vehicle");
   const backhaulStatusEl = document.getElementById("backhaul-status");
   const spoolStatusEl = document.getElementById("spool-status");
@@ -34,6 +35,24 @@
   const btnToggleStream = document.getElementById("btn-toggle-stream");
   const btnClearStream = document.getElementById("btn-clear-stream");
   const streamRateBadge = document.getElementById("stream-rate-badge");
+
+  // Tab switching helper
+  function switchToTab(tabName) {
+    document.querySelectorAll(".tab-btn").forEach(b => {
+      if (b.dataset.tab === tabName) {
+        b.classList.add("active");
+      } else {
+        b.classList.remove("active");
+      }
+    });
+    document.querySelectorAll(".tab-content").forEach(c => {
+      if (c.id === `tab-${tabName}`) {
+        c.classList.add("active");
+      } else {
+        c.classList.remove("active");
+      }
+    });
+  }
 
   // Telemetry stream controls (Pause / Resume & Clear)
   if (btnToggleStream) {
@@ -79,11 +98,7 @@
   // Tab switching
   document.querySelectorAll(".tab-btn").forEach(btn => {
     btn.addEventListener("click", () => {
-      document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
-      document.querySelectorAll(".tab-content").forEach(c => c.classList.remove("active"));
-      btn.classList.add("active");
-      const target = document.getElementById(`tab-${btn.dataset.tab}`);
-      if (target) target.classList.add("active");
+      switchToTab(btn.dataset.tab);
     });
   });
 
@@ -354,18 +369,19 @@
     });
   }
 
-  // Update C2 Command Target dropdown with all active vehicles
+  // Update C2 Command Target dropdown with friendly blue vehicles only
   function updateCommandVehicleDropdown() {
     if (!cmdVehicleSelect) return;
     const currentVal = cmdVehicleSelect.value;
-    const vehicles = Object.values(state.fleet);
+    const blueVehicles = Object.values(state.fleet).filter(v => v.telemetry && v.telemetry.team === "blue");
+    if (blueVehicles.length === 0) return;
 
-    cmdVehicleSelect.innerHTML = vehicles.map(v => {
+    cmdVehicleSelect.innerHTML = blueVehicles.map(v => {
       const t = v.telemetry;
-      return `<option value="${t.vehicle_id}">${t.vehicle_id.toUpperCase()} (${t.team.toUpperCase()})</option>`;
+      return `<option value="${t.vehicle_id}">${t.vehicle_id.toUpperCase()} (BLUE)</option>`;
     }).join("");
 
-    if (currentVal && state.fleet[currentVal]) {
+    if (currentVal && state.fleet[currentVal] && state.fleet[currentVal].telemetry?.team === "blue") {
       cmdVehicleSelect.value = currentVal;
     }
   }
@@ -392,20 +408,18 @@
       return;
     }
 
-    // Filter displayed vehicles
-    const displayedVehicles = vehicles.filter(v => {
-      if (state.fleetFilter === "blue") return v.telemetry.team === "blue";
-      if (state.fleetFilter === "red") return v.telemetry.team === "red";
-      return true;
+    const filtered = vehicles.filter(v => {
+      if (state.fleetFilter === "all") return true;
+      return v.telemetry.team === state.fleetFilter;
     });
 
-    if (displayedVehicles.length === 0) {
-      fleetListEl.innerHTML = `<div class="empty-state">No vehicles matching '${state.fleetFilter.toUpperCase()}' filter.</div>`;
+    if (filtered.length === 0) {
+      fleetListEl.innerHTML = `<div class="empty-state">No vehicles in ${state.fleetFilter.toUpperCase()} filter.</div>`;
       return;
     }
 
-    // Sort: Blue fleet first, then Red fleet
-    displayedVehicles.sort((a, b) => {
+    // Sort: Blue fleet first, then alphabetically
+    const displayedVehicles = [...filtered].sort((a, b) => {
       if (a.telemetry.team !== b.telemetry.team) {
         return a.telemetry.team === "blue" ? -1 : 1;
       }
@@ -424,7 +438,7 @@
       const lowBattBadge = isLowBatt ? `<span class="badge badge-low-battery">LOW BATT (${t.battery_pct.toFixed(0)}%)</span>` : "";
 
       return `
-        <div class="fleet-card ${teamClass} ${lowBattClass}">
+        <div class="fleet-card ${teamClass} ${lowBattClass}" data-vehicle-id="${t.vehicle_id}">
           <div class="fleet-card-header">
             <div style="display:flex; align-items:center; gap:6px;">
               <span class="${callsignClass}">${t.vehicle_id.toUpperCase()}</span>
@@ -450,6 +464,24 @@
         </div>
       `;
     }).join("");
+
+    // Enable interactive selection and map focusing upon clicking a fleet card
+    fleetListEl.querySelectorAll(".fleet-card").forEach(card => {
+      card.addEventListener("click", () => {
+        const vID = card.dataset.vehicleId;
+        if (!vID || !state.fleet[vID]) return;
+        const v = state.fleet[vID];
+        if (state.map) {
+          state.map.setView([v.telemetry.coordinates.lat, v.telemetry.coordinates.lon], 14, { animate: true });
+          if (state.markers[vID]) {
+            state.markers[vID].openPopup();
+          }
+        }
+        if (v.telemetry.team === "blue" && cmdVehicleSelect) {
+          cmdVehicleSelect.value = vID;
+        }
+      });
+    });
   }
 
   // Append Telemetry Log Row with Smart Calming & Rate Throttling
@@ -502,7 +534,7 @@
       <td>${teamBadge} <strong>${t.vehicle_id.toUpperCase()}</strong></td>
       <td>${stateBadge}</td>
       <td>${battBadge}</td>
-      <td>${t.coordinates.lat.toFixed(2)}, ${t.coordinates.lon.toFixed(2)}</td>
+      <td>${t.coordinates.lat.toFixed(4)}, ${t.coordinates.lon.toFixed(4)}</td>
       <td>${t.coordinates.alt_m.toFixed(0)}m</td>
       <td title="${h.digest}">${h.digest.substring(0, 8)}...</td>
     `;
@@ -513,10 +545,10 @@
     }
   }
 
-  // Poll DLQ Records from CDS Guard
-  async function pollDLQ() {
+  // Poll DLQ Records from CDS Guard via C2 Gateway proxy
+  async function fetchDLQ() {
     try {
-      const resp = await fetch("http://127.0.0.1:8081/dlq");
+      const resp = await fetch("/api/v1/dlq");
       if (resp.ok) {
         const records = await resp.json();
         if (records && records.length > 0) {
@@ -526,6 +558,14 @@
     } catch (e) {
       // CDS HTTP might be on another port or host in test mode
     }
+  }
+
+  function pollDLQNow() {
+    fetchDLQ();
+  }
+
+  function pollDLQ() {
+    fetchDLQ();
     setTimeout(pollDLQ, 3000);
   }
 
@@ -572,29 +612,68 @@
       const data = await resp.json();
       if (resp.ok) {
         cmdFeedbackEl.textContent = `SUCCESS: Dispatched ${cmdType} to ${vehicle.toUpperCase()}`;
+        cmdFeedbackEl.style.color = "var(--status-green)";
       } else {
         cmdFeedbackEl.textContent = `FAILED: ${data.error || "Unknown error"}`;
+        cmdFeedbackEl.style.color = "var(--status-red)";
       }
     } catch (err) {
       cmdFeedbackEl.textContent = `NETWORK ERROR: ${err.message}`;
+      cmdFeedbackEl.style.color = "var(--status-red)";
     }
   });
 
   // Zero-Trust Test Injections (Demonstrates CDS Guard fail-closed behavior)
   document.getElementById("btn-inject-tier2").addEventListener("click", () => {
-    injectSyntheticTelemetry("TIER-2: RESTRICTED", false, "Simulating TIER-2 high-precision telemetry");
+    injectSyntheticTelemetry("TIER-2: RESTRICTED", false, "Emitted TIER-2 Restricted -> Redacted & Down-tagged to TIER-1");
   });
 
   document.getElementById("btn-inject-tier3").addEventListener("click", () => {
-    injectSyntheticTelemetry("TIER-3: CRITICAL", false, "Simulating TIER-3 sovereign state (EXPECT CDS QUARANTINE)");
+    injectSyntheticTelemetry("TIER-3: CRITICAL", false, "Emitted TIER-3 Critical -> Barred from Egress (CDS Quarantined)");
   });
 
   document.getElementById("btn-inject-tamper").addEventListener("click", () => {
-    injectSyntheticTelemetry("TIER-2: RESTRICTED", true, "Simulating tampered payload digest breach");
+    injectSyntheticTelemetry("TIER-2: RESTRICTED", true, "Emitted Tampered Digest -> Cryptographic Breach (CDS Quarantined)");
   });
 
-  function injectSyntheticTelemetry(tier, tamper, note) {
-    cmdFeedbackEl.textContent = `Injected: ${note}`;
+  async function injectSyntheticTelemetry(tier, tamper, note) {
+    if (injectorFeedbackEl) {
+      injectorFeedbackEl.textContent = `Injecting: ${note}...`;
+      injectorFeedbackEl.style.color = "var(--status-amber)";
+    }
+    try {
+      const resp = await fetch("/api/v1/inject", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tier: tier,
+          tamper: tamper,
+          target_vehicle: "blue-alpha"
+        })
+      });
+
+      if (resp.ok) {
+        if (injectorFeedbackEl) {
+          injectorFeedbackEl.textContent = `SUCCESS: ${note}`;
+          injectorFeedbackEl.style.color = (tamper || tier === "TIER-3: CRITICAL") ? "var(--status-red)" : "var(--status-green)";
+        }
+        if (tamper || tier === "TIER-3: CRITICAL") {
+          switchToTab("cds-quarantine");
+        }
+        setTimeout(pollDLQNow, 300);
+      } else {
+        const data = await resp.json().catch(() => ({}));
+        if (injectorFeedbackEl) {
+          injectorFeedbackEl.textContent = `FAILED: ${data.error || "Injection failed"}`;
+          injectorFeedbackEl.style.color = "var(--status-red)";
+        }
+      }
+    } catch (err) {
+      if (injectorFeedbackEl) {
+        injectorFeedbackEl.textContent = `NETWORK ERROR: ${err.message}`;
+        injectorFeedbackEl.style.color = "var(--status-red)";
+      }
+    }
   }
 
   // Update Starlink Backhaul & Data Mule UI
