@@ -5,10 +5,12 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -212,6 +214,27 @@ func (g *Gateway) handleCommand(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Friendly C2 dispatch is restricted to friendly blue fleet assets
+	g.fleetMu.RLock()
+	st, inFleet := g.fleet[req.TargetVehicle]
+	g.fleetMu.RUnlock()
+
+	if inFleet {
+		if st.Telemetry.Team != "blue" {
+			http.Error(w, fmt.Sprintf("unauthorized target vehicle: %s (C2 dispatch restricted to friendly blue fleet)", req.TargetVehicle), http.StatusForbidden)
+			return
+		}
+	} else {
+		isBlueTarget := strings.HasPrefix(req.TargetVehicle, "blue-") ||
+			req.TargetVehicle == "alpha" || req.TargetVehicle == "bravo" ||
+			req.TargetVehicle == "charlie" || req.TargetVehicle == "delta" ||
+			req.TargetVehicle == "echo"
+		if !isBlueTarget || strings.HasPrefix(req.TargetVehicle, "red-") {
+			http.Error(w, fmt.Sprintf("unauthorized target vehicle: %s (C2 dispatch restricted to friendly blue fleet)", req.TargetVehicle), http.StatusForbidden)
+			return
+		}
+	}
+
 	cmdPayload := schema.CommandPayload{
 		CommandID:     fmt.Sprintf("cmd-%d", time.Now().UnixNano()),
 		TargetVehicle: req.TargetVehicle,
@@ -249,6 +272,127 @@ func (g *Gateway) handleCommand(w http.ResponseWriter, r *http.Request) {
 		"command_id": cmdPayload.CommandID,
 		"topic":      topic,
 	})
+}
+
+// InjectRequest specifies parameters for injecting synthetic test telemetry.
+type InjectRequest struct {
+	Tier          string `json:"tier"`
+	Tamper        bool   `json:"tamper"`
+	TargetVehicle string `json:"target_vehicle"`
+}
+
+func (g *Gateway) handleInject(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req InjectRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, fmt.Sprintf("invalid json: %v", err), http.StatusBadRequest)
+		return
+	}
+
+	vehicleID := req.TargetVehicle
+	if vehicleID == "" {
+		vehicleID = "blue-alpha"
+	}
+
+	synthTier := req.Tier
+	if synthTier != schema.Tier3Critical && synthTier != schema.Tier2Restricted && synthTier != schema.Tier1Public {
+		synthTier = schema.Tier3Critical
+	}
+
+	telem := schema.TelemetryPayload{
+		VehicleID:   vehicleID,
+		VehicleType: "drone",
+		Team:        "blue",
+		State:       "INJECTED_TEST",
+		BatteryPct:  95.0,
+		Coordinates: schema.Coordinates{
+			Latitude:  31.6250,
+			Longitude: -8.0820,
+			AltitudeM: 135.0,
+		},
+		HeadingDeg: 90.0,
+		Sequence:   uint64(time.Now().UnixNano()),
+		Velocity:   schema.Velocity{SpeedMps: 14.0},
+	}
+
+	env, err := schema.NewTelemetryEnvelope(synthTier, "synthetic-cop-injector", telem, []string{"TEST_INJECTION"})
+	if err != nil {
+		http.Error(w, fmt.Sprintf("building envelope: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	if req.Tamper {
+		// Tamper with payload digest to trigger ReasonDigestMismatch in CDS Guard
+		env.Header.Digest = "0000000000000000000000000000000000000000000000000000000000000000"
+	}
+
+	data, err := json.Marshal(env)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("marshalling envelope: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	var tierToken string
+	switch synthTier {
+	case schema.Tier3Critical:
+		tierToken = "tier3"
+	case schema.Tier2Restricted:
+		tierToken = "tier2"
+	default:
+		tierToken = "tier1"
+	}
+
+	topic := zenohutil.BuildKey(tierToken, "drone", "blue", vehicleID, "telemetry")
+	if err := g.bus.Publish(r.Context(), topic, data); err != nil {
+		http.Error(w, fmt.Sprintf("publishing to Zenoh: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	log.Printf("[C2 GATEWAY] Injected test telemetry: Tier=%s, Tampered=%v, Topic=%s", synthTier, req.Tamper, topic)
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]any{
+		"status":  "INJECTED",
+		"topic":   topic,
+		"tier":    synthTier,
+		"tamper":  req.Tamper,
+		"vehicle": vehicleID,
+	})
+}
+
+func (g *Gateway) handleDLQ(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if g.cdsProxyURL == "" {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode([]any{})
+		return
+	}
+
+	targetURL := strings.TrimRight(g.cdsProxyURL, "/") + "/dlq"
+	req, err := http.NewRequestWithContext(r.Context(), http.MethodGet, targetURL, nil)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("creating proxy request: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	client := &http.Client{Timeout: 3 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("CDS Guard unavailable: %v", err), http.StatusServiceUnavailable)
+		return
+	}
+	defer resp.Body.Close()
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(resp.StatusCode)
+	_, _ = io.Copy(w, resp.Body)
 }
 
 func (g *Gateway) handleWS(w http.ResponseWriter, r *http.Request) {
@@ -347,6 +491,8 @@ func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v1/fleet", gw.handleFleet)
 	mux.HandleFunc("/api/v1/command", gw.handleCommand)
+	mux.HandleFunc("/api/v1/inject", gw.handleInject)
+	mux.HandleFunc("/api/v1/dlq", gw.handleDLQ)
 	mux.HandleFunc("/api/v1/backhaul", gw.handleBackhaul)
 	mux.HandleFunc("/api/v1/backhaul/simulate", gw.handleBackhaulSimulate)
 	mux.HandleFunc("/ws/telemetry", gw.handleWS)

@@ -302,3 +302,195 @@ func TestGateway_WebSocketStreaming(t *testing.T) {
 		t.Errorf("expected vehicle delta, got %s", receivedEnv.Telemetry.VehicleID)
 	}
 }
+
+func TestGateway_TargetVehicleAuthorization(t *testing.T) {
+	bus := zenohutil.NewMemoryBus()
+	defer bus.Close()
+
+	gw := NewGateway(bus, "http://127.0.0.1:8081", nil)
+
+	// 1. Attempt command to adversary red drone (unregistered) -> must return 403 Forbidden
+	body := []byte(`{"target_vehicle":"red-1","command_type":"RETURN_TO_BASE","parameters":{}}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/command", bytes.NewReader(body))
+	w := httptest.NewRecorder()
+	gw.handleCommand(w, req)
+
+	if w.Code != http.StatusForbidden {
+		t.Errorf("expected 403 Forbidden for red-1 target, got %d", w.Code)
+	}
+
+	// 2. Command to valid blue drone (unregistered fallback) -> must succeed (200 OK)
+	body = []byte(`{"target_vehicle":"blue-bravo","command_type":"PATROL","parameters":{}}`)
+	req = httptest.NewRequest(http.MethodPost, "/api/v1/command", bytes.NewReader(body))
+	w = httptest.NewRecorder()
+	gw.handleCommand(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200 OK for blue-bravo target, got %d", w.Code)
+	}
+
+	// 3. Register vehicle in fleet with adversary red team -> must reject with 403 Forbidden even if name trick
+	gw.fleetMu.Lock()
+	gw.fleet["adversary-infiltrator"] = &VehicleState{
+		Telemetry: schema.TelemetryPayload{VehicleID: "adversary-infiltrator", Team: "red"},
+	}
+	// Also register a blue vehicle
+	gw.fleet["custom-scout"] = &VehicleState{
+		Telemetry: schema.TelemetryPayload{VehicleID: "custom-scout", Team: "blue"},
+	}
+	gw.fleetMu.Unlock()
+
+	body = []byte(`{"target_vehicle":"adversary-infiltrator","command_type":"PATROL","parameters":{}}`)
+	req = httptest.NewRequest(http.MethodPost, "/api/v1/command", bytes.NewReader(body))
+	w = httptest.NewRecorder()
+	gw.handleCommand(w, req)
+
+	if w.Code != http.StatusForbidden {
+		t.Errorf("expected 403 Forbidden for registered red team asset, got %d", w.Code)
+	}
+
+	// 4. Command to registered blue team vehicle -> must succeed (200 OK)
+	body = []byte(`{"target_vehicle":"custom-scout","command_type":"PATROL","parameters":{}}`)
+	req = httptest.NewRequest(http.MethodPost, "/api/v1/command", bytes.NewReader(body))
+	w = httptest.NewRecorder()
+	gw.handleCommand(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200 OK for registered blue asset, got %d", w.Code)
+	}
+}
+
+func TestGateway_InjectEndpoint(t *testing.T) {
+	bus := zenohutil.NewMemoryBus()
+	defer bus.Close()
+
+	gw := NewGateway(bus, "http://127.0.0.1:8081", nil)
+
+	// 1. Invalid method (GET instead of POST)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/inject", nil)
+	w := httptest.NewRecorder()
+	gw.handleInject(w, req)
+	if w.Code != http.StatusMethodNotAllowed {
+		t.Errorf("expected 405 for GET on /api/v1/inject, got %d", w.Code)
+	}
+
+	// 2. Test TIER-3 Critical injection
+	receivedChan := make(chan []byte, 1)
+	bus.Subscribe(context.Background(), "sec/tier3/drone/blue/blue-alpha/telemetry", func(key string, payload []byte) {
+		receivedChan <- payload
+	})
+
+	body := []byte(`{"tier":"TIER-3: CRITICAL","tamper":false,"target_vehicle":"blue-alpha"}`)
+	req = httptest.NewRequest(http.MethodPost, "/api/v1/inject", bytes.NewReader(body))
+	w = httptest.NewRecorder()
+	gw.handleInject(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK for inject, got %d: %s", w.Code, w.Body.String())
+	}
+
+	select {
+	case payload := <-receivedChan:
+		env, err := zenohutil.ParseJSONEnvelope(payload)
+		if err != nil {
+			t.Fatalf("failed to parse injected envelope: %v", err)
+		}
+		if env.Header.Classification != schema.Tier3Critical {
+			t.Errorf("expected TIER-3 classification, got %s", env.Header.Classification)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatalf("timed out waiting for injected TIER-3 telemetry")
+	}
+
+	// 3. Test Tampered injection
+	tamperChan := make(chan []byte, 1)
+	bus.Subscribe(context.Background(), "sec/tier2/drone/blue/blue-echo/telemetry", func(key string, payload []byte) {
+		tamperChan <- payload
+	})
+
+	body = []byte(`{"tier":"TIER-2: RESTRICTED","tamper":true,"target_vehicle":"blue-echo"}`)
+	req = httptest.NewRequest(http.MethodPost, "/api/v1/inject", bytes.NewReader(body))
+	w = httptest.NewRecorder()
+	gw.handleInject(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK for tampered inject, got %d: %s", w.Code, w.Body.String())
+	}
+
+	select {
+	case payload := <-tamperChan:
+		env, err := zenohutil.ParseJSONEnvelope(payload)
+		if err != nil {
+			t.Fatalf("failed to parse injected envelope: %v", err)
+		}
+		// Validate should fail because digest is corrupted
+		if err := env.Validate(); err == nil {
+			t.Errorf("expected envelope validation to fail on tampered digest")
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatalf("timed out waiting for tampered telemetry")
+	}
+}
+
+func TestGateway_DLQProxy(t *testing.T) {
+	// Mock CDS Guard HTTP server
+	mockCDS := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/dlq" {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`[{"record_id":"DLQ-1","rejection_reason":"TEST_REASON"}]`))
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	defer mockCDS.Close()
+
+	bus := zenohutil.NewMemoryBus()
+	defer bus.Close()
+
+	gw := NewGateway(bus, mockCDS.URL, nil)
+
+	// 1. Invalid method (POST instead of GET)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/dlq", nil)
+	w := httptest.NewRecorder()
+	gw.handleDLQ(w, req)
+	if w.Code != http.StatusMethodNotAllowed {
+		t.Errorf("expected 405 for POST on /api/v1/dlq, got %d", w.Code)
+	}
+
+	// 2. Successful proxy to mock CDS
+	req = httptest.NewRequest(http.MethodGet, "/api/v1/dlq", nil)
+	w = httptest.NewRecorder()
+	gw.handleDLQ(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK from DLQ proxy, got %d", w.Code)
+	}
+	if !strings.Contains(w.Body.String(), "DLQ-1") {
+		t.Errorf("expected response to contain DLQ-1, got: %s", w.Body.String())
+	}
+
+	// 3. Fallback when CDS proxy URL is unconfigured
+	gwUnconfigured := NewGateway(bus, "", nil)
+	req = httptest.NewRequest(http.MethodGet, "/api/v1/dlq", nil)
+	w = httptest.NewRecorder()
+	gwUnconfigured.handleDLQ(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200 OK fallback for unconfigured CDS proxy, got %d", w.Code)
+	}
+	if strings.TrimSpace(w.Body.String()) != "[]" {
+		t.Errorf("expected empty array [] on unconfigured CDS proxy, got: %s", w.Body.String())
+	}
+
+	// 4. Configured CDS guard is unreachable -> returns 503 Service Unavailable
+	gwOffline := NewGateway(bus, "http://127.0.0.1:59999", nil)
+	req = httptest.NewRequest(http.MethodGet, "/api/v1/dlq", nil)
+	w = httptest.NewRecorder()
+	gwOffline.handleDLQ(w, req)
+
+	if w.Code != http.StatusServiceUnavailable {
+		t.Errorf("expected 503 Service Unavailable when CDS is offline, got %d", w.Code)
+	}
+}
+
