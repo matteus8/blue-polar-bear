@@ -11,7 +11,9 @@
     fleetFilter: "all",
     streamPaused: false,
     lastLogOverall: 0,
-    lastVehicleState: {}
+    lastVehicleState: {},
+    selectedVehicleId: "blue-alpha",
+    lastDropdownIDs: ""
   };
 
   // DOM Elements
@@ -319,22 +321,39 @@
     }
   }
 
-  // Update Leaflet marker and breadcrumb track with Team colors
+  // Update Leaflet marker and breadcrumb track with Team colors & Tactical Badges
   function updateMapMarker(vID, coord, t) {
     if (!state.map) return;
 
     const isRed = t.team === "red";
     const color = isRed ? "#BA4540" : "#326B94";
     const isLowBatt = t.battery_pct < 20;
+    const isSelected = state.selectedVehicleId === vID;
+
+    let stateClass = "";
+    if (t.state === "RTB") stateClass = "state-rtb";
+    else if (t.state === "LANDED") stateClass = "state-landed";
+
+    const shortID = t.vehicle_id.replace("blue-", "B-").replace("red-", "R-").toUpperCase();
+    const markerHTML = `
+      <div class="marker-container ${isSelected ? 'selected-target' : ''} ${stateClass}">
+        <div class="marker-dot" style="background:${color};"></div>
+        <div class="marker-label">${shortID} <span class="marker-sub">[${t.state}]</span></div>
+      </div>
+    `;
 
     if (!state.markers[vID]) {
       const icon = L.divIcon({
         className: 'vehicle-marker',
-        html: `<div style="background:${color}; width:12px; height:12px; border-radius:50%; border:2px solid #FFFFFF; box-shadow:0 1px 4px rgba(0,0,0,0.25);"></div>`,
-        iconSize: [16, 16],
-        iconAnchor: [8, 8]
+        html: markerHTML,
+        iconSize: [60, 36],
+        iconAnchor: [30, 8]
       });
-      state.markers[vID] = L.marker(coord, { icon }).addTo(state.map);
+      const marker = L.marker(coord, { icon }).addTo(state.map);
+      marker.on("click", () => {
+        selectVehicle(vID, false);
+      });
+      state.markers[vID] = marker;
       state.polylines[vID] = L.polyline(state.fleet[vID].tracks, {
         color: color,
         weight: 2.5,
@@ -344,6 +363,13 @@
     } else {
       state.markers[vID].setLatLng(coord);
       state.polylines[vID].setLatLngs(state.fleet[vID].tracks);
+      const icon = L.divIcon({
+        className: 'vehicle-marker',
+        html: markerHTML,
+        iconSize: [60, 36],
+        iconAnchor: [30, 8]
+      });
+      state.markers[vID].setIcon(icon);
     }
 
     const battDisplay = isLowBatt 
@@ -355,7 +381,7 @@
         <div style="font-weight: 700; color: ${color}; font-size: 13px; margin-bottom: 3px;">
           ${t.vehicle_id.toUpperCase()} <span style="font-size: 11px; font-weight: 600; color: #968D82;">(${t.team.toUpperCase()} TEAM)</span>
         </div>
-        <div><strong>State:</strong> ${t.state}</div>
+        <div><strong>State:</strong> <span style="font-weight:700; color:${t.state === 'RTB' ? '#D9822B' : color};">${t.state}</span></div>
         <div><strong>Altitude:</strong> ${t.coordinates.alt_m.toFixed(1)}m | <strong>Speed:</strong> ${t.velocity.speed_mps.toFixed(1)}m/s</div>
         <div><strong>Battery:</strong> ${battDisplay}</div>
         <div style="font-family: monospace; font-size: 11px; color: #6E655C; margin-top: 3px;">
@@ -389,24 +415,31 @@
     });
   }
 
-  // Update C2 Command Target dropdown with friendly blue vehicles only
+  // Update C2 Command Target dropdown with friendly blue vehicles only (stable, preserves selection)
   function updateCommandVehicleDropdown() {
     if (!cmdVehicleSelect) return;
-    const currentVal = cmdVehicleSelect.value;
+    const currentVal = cmdVehicleSelect.value || state.selectedVehicleId;
     const blueVehicles = Object.values(state.fleet).filter(v => v.telemetry && v.telemetry.team === "blue");
     if (blueVehicles.length === 0) {
       cmdVehicleSelect.innerHTML = `<option value="">No friendly assets available</option>`;
       cmdVehicleSelect.disabled = true;
       return;
     }
-    cmdVehicleSelect.disabled = false;
 
+    const newIDs = blueVehicles.map(v => v.telemetry.vehicle_id).sort().join(",");
+    if (state.lastDropdownIDs === newIDs) {
+      return;
+    }
+    state.lastDropdownIDs = newIDs;
+
+    cmdVehicleSelect.disabled = false;
     cmdVehicleSelect.innerHTML = blueVehicles.map(v => {
       const t = v.telemetry;
-      return `<option value="${t.vehicle_id}">${t.vehicle_id.toUpperCase()} (BLUE)</option>`;
+      const isSel = (t.vehicle_id === currentVal) ? "selected" : "";
+      return `<option value="${t.vehicle_id}" ${isSel}>${t.vehicle_id.toUpperCase()} (BLUE)</option>`;
     }).join("");
 
-    if (currentVal && state.fleet[currentVal] && state.fleet[currentVal].telemetry?.team === "blue") {
+    if (currentVal && state.fleet[currentVal]) {
       cmdVehicleSelect.value = currentVal;
     }
   }
@@ -462,8 +495,11 @@
       const batColor = t.battery_pct > 50 ? "var(--status-green)" : t.battery_pct > 20 ? "var(--status-amber)" : "var(--status-red)";
       const lowBattBadge = isLowBatt ? `<span class="badge badge-low-battery">LOW BATT (${t.battery_pct.toFixed(0)}%)</span>` : "";
 
+      const isSelected = state.selectedVehicleId === t.vehicle_id;
+      const selectedClass = isSelected ? "selected-card" : "";
+
       return `
-        <div class="fleet-card ${teamClass} ${lowBattClass}" data-vehicle-id="${t.vehicle_id}" role="button" tabindex="0" aria-label="Select and inspect ${t.vehicle_id.toUpperCase()}">
+        <div class="fleet-card ${teamClass} ${lowBattClass} ${selectedClass}" data-vehicle-id="${t.vehicle_id}" role="button" tabindex="0" aria-label="Select and inspect ${t.vehicle_id.toUpperCase()}">
           <div class="fleet-card-header">
             <div style="display:flex; align-items:center; gap:6px;">
               <span class="${callsignClass}">${t.vehicle_id.toUpperCase()}</span>
@@ -490,30 +526,60 @@
       `;
     }).join("");
 
-    // Enable interactive selection and map focusing upon clicking or pressing Enter/Space on a fleet card
-    function selectVehicleCard(vID) {
-      if (!vID || !state.fleet[vID]) return;
-      const v = state.fleet[vID];
-      if (state.map) {
-        state.map.setView([v.telemetry.coordinates.lat, v.telemetry.coordinates.lon], 14, { animate: true });
-        if (state.markers[vID]) {
-          state.markers[vID].openPopup();
-        }
-      }
-      if (v.telemetry.team === "blue" && cmdVehicleSelect) {
-        cmdVehicleSelect.value = vID;
-      }
-    }
-
     fleetListEl.querySelectorAll(".fleet-card").forEach(card => {
-      card.addEventListener("click", () => selectVehicleCard(card.dataset.vehicleId));
+      card.addEventListener("click", () => selectVehicle(card.dataset.vehicleId, true));
       card.addEventListener("keydown", (e) => {
         if (e.key === "Enter" || e.key === " ") {
           e.preventDefault();
-          selectVehicleCard(card.dataset.vehicleId);
+          selectVehicle(card.dataset.vehicleId, true);
         }
       });
     });
+  }
+
+  // Select a vehicle, sync C2 dropdown, highlight card, and apply tactical target reticle
+  function selectVehicle(vID, shouldPan = false) {
+    if (!vID) return;
+    state.selectedVehicleId = vID;
+
+    // Sync C2 dropdown if this is a friendly blue drone
+    if (cmdVehicleSelect && state.fleet[vID] && state.fleet[vID].telemetry?.team === "blue") {
+      cmdVehicleSelect.value = vID;
+    }
+
+    // Highlight card in fleet list
+    if (fleetListEl) {
+      fleetListEl.querySelectorAll(".fleet-card").forEach(card => {
+        if (card.dataset.vehicleId === vID) {
+          card.classList.add("selected-card");
+        } else {
+          card.classList.remove("selected-card");
+        }
+      });
+    }
+
+    // Update marker styling and open popup
+    Object.keys(state.markers).forEach(id => {
+      const marker = state.markers[id];
+      const el = marker.getElement ? marker.getElement() : null;
+      if (el) {
+        const container = el.querySelector(".marker-container");
+        if (container) {
+          if (id === vID) {
+            container.classList.add("selected-target");
+          } else {
+            container.classList.remove("selected-target");
+          }
+        }
+      }
+    });
+
+    if (state.markers[vID]) {
+      state.markers[vID].openPopup();
+      if (shouldPan && state.map && state.fleet[vID]) {
+        state.map.panTo([state.fleet[vID].telemetry.coordinates.lat, state.fleet[vID].telemetry.coordinates.lon], { animate: true });
+      }
+    }
   }
 
   // Append Telemetry Log Row with Smart Calming & Rate Throttling
@@ -623,6 +689,13 @@
         <td title="${r.error_details}">${r.error_details.substring(0, 40)}...</td>
       </tr>
     `).join("");
+  }
+
+  // Synchronize dropdown changes with active map and fleet list selection
+  if (cmdVehicleSelect) {
+    cmdVehicleSelect.addEventListener("change", () => {
+      selectVehicle(cmdVehicleSelect.value, false);
+    });
   }
 
   // Dispatch C2 Command

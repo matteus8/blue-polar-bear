@@ -43,7 +43,8 @@ func NewMemoryBus() *MemoryBus {
 	}
 }
 
-func matchesSelector(selector, key string) bool {
+// MatchesSelector checks whether a given Zenoh key matches a topic selector expression.
+func MatchesSelector(selector, key string) bool {
 	if selector == "**" || selector == key {
 		return true
 	}
@@ -83,7 +84,7 @@ func (m *MemoryBus) Publish(ctx context.Context, key string, payload []byte) err
 	}
 
 	for selector, handlers := range m.subscribers {
-		if matchesSelector(selector, key) {
+		if MatchesSelector(selector, key) {
 			for _, h := range handlers {
 				go h(key, payload)
 			}
@@ -227,6 +228,10 @@ func (c *RESTClient) Subscribe(ctx context.Context, selector string, handler Mes
 						} else if len(sseEvt.Value) > 0 {
 							payloadBytes = sseEvt.Value
 						}
+					}
+
+					if !MatchesSelector(selector, actualKey) {
+						continue
 					}
 
 					handler(actualKey, payloadBytes)

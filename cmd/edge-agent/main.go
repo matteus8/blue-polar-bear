@@ -9,6 +9,7 @@ import (
 	"math"
 	"os"
 	"os/signal"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -246,10 +247,28 @@ func (v *VehicleSim) Step(dt float64) schema.TelemetryPayload {
 	}
 }
 
+// SetBase assigns a dedicated recovery pad coordinate for the vehicle.
+func (v *VehicleSim) SetBase(baseLat, baseLon float64) {
+	v.mu.Lock()
+	defer v.mu.Unlock()
+	v.baseLat = baseLat
+	v.baseLon = baseLon
+}
+
 // HandleCommand executes an operator C2 flight instruction.
 func (v *VehicleSim) HandleCommand(cmd schema.CommandPayload) {
 	v.mu.Lock()
 	defer v.mu.Unlock()
+
+	// Strict Target Vehicle Validation:
+	// A drone must only execute commands explicitly addressed to its callsign/ID
+	if cmd.TargetVehicle != "" && !strings.EqualFold(cmd.TargetVehicle, v.id) {
+		trimmedTarget := strings.TrimPrefix(strings.TrimPrefix(strings.ToLower(cmd.TargetVehicle), "blue-"), "red-")
+		trimmedID := strings.TrimPrefix(strings.TrimPrefix(strings.ToLower(v.id), "blue-"), "red-")
+		if trimmedTarget != trimmedID {
+			return
+		}
+	}
 
 	log.Printf("[EDGE AGENT %s (%s)] Executing C2 Command: %s (ID: %s)", v.id, v.team, cmd.CommandType, cmd.CommandID)
 
@@ -292,6 +311,9 @@ func runDroneInstance(ctx context.Context, sim *VehicleSim, bus zenohutil.Bus, r
 	// Command topic: sec/tier2/drone/<team>/<id>/command
 	cmdTopic := zenohutil.BuildKey("tier2", sim.vehicleType, sim.team, sim.id, "command")
 	err := bus.Subscribe(ctx, cmdTopic, func(key string, payload []byte) {
+		if !zenohutil.MatchesSelector(cmdTopic, key) {
+			return
+		}
 		env, err := zenohutil.ParseJSONEnvelope(payload)
 		if err != nil || env.Command == nil {
 			return
@@ -389,10 +411,15 @@ func main() {
 			radius := 0.006 + (float64(i) * 0.002)
 			speed := 13.0 + (float64(i) * 1.2)
 
+			// Dedicated recovery pad staggered safely in friendly base sector
+			padLat := 31.6120 + (float64(i) * 0.002)
+			padLon := -8.0850 - (float64(i) * 0.002)
+
 			sim := NewVehicleSim(callsign, "drone", "blue", lat, lon, alt, radius, speed)
+			sim.SetBase(padLat, padLon)
 			wg.Add(1)
 			go runDroneInstance(ctx, sim, bus, *rateHz, *emitTier3Periodic && (i == 0), &wg)
-			log.Printf("  • Spawned Blue Drone: [%s] Orbit Center: (%.4f, %.4f) Alt: %.0fm", callsign, lat, lon, alt)
+			log.Printf("  • Spawned Blue Drone: [%s] Orbit Center: (%.4f, %.4f) Pad: (%.4f, %.4f) Alt: %.0fm", callsign, lat, lon, padLat, padLon, alt)
 		}
 
 		// Spawn Red Fleet (Adversary Forces)
@@ -405,10 +432,14 @@ func main() {
 			radius := 0.007 + (float64(i) * 0.002)
 			speed := 14.0 + (float64(i) * 1.5)
 
+			padLat := 31.6450 + (float64(i) * 0.002)
+			padLon := -7.9300 + (float64(i) * 0.002)
+
 			sim := NewVehicleSim(callsign, "drone", "red", lat, lon, alt, radius, speed)
+			sim.SetBase(padLat, padLon)
 			wg.Add(1)
 			go runDroneInstance(ctx, sim, bus, *rateHz, false, &wg)
-			log.Printf("  • Spawned Red Drone:  [%s] Orbit Center: (%.4f, %.4f) Alt: %.0fm", callsign, lat, lon, alt)
+			log.Printf("  • Spawned Red Drone:  [%s] Orbit Center: (%.4f, %.4f) Pad: (%.4f, %.4f) Alt: %.0fm", callsign, lat, lon, padLat, padLon, alt)
 		}
 	} else {
 		// Single Drone Mode (Morocco sector)
