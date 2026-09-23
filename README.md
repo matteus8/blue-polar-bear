@@ -1,6 +1,6 @@
 # Blue Polar Bear: Tactical Edge-to-Cloud C2 & Telemetry Mesh
 
-[![Release](https://img.shields.io/badge/Release-v0.4.0-blue.svg)](https://github.com/matteus8/blue-polar-bear/releases/tag/v0.4.0)
+[![Release](https://img.shields.io/badge/Release-v0.6.0-blue.svg)](https://github.com/matteus8/blue-polar-bear/releases/tag/v0.6.0)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Protocol: Eclipse Zenoh](https://img.shields.io/badge/Protocol-Eclipse_Zenoh_1.1.0-orange.svg)](https://zenoh.io/)
 [![Stack: Go](https://img.shields.io/badge/Language-Go_1.22+-00ADD8.svg)](https://go.dev/)
