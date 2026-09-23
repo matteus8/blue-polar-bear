@@ -28,9 +28,9 @@ func TestDataMule_StoreAndForward(t *testing.T) {
 		t.Errorf("expected online status, got %s", metrics.Status)
 	}
 
-	// 2. Ingest online -> forwards directly
+	// 2. Ingest online -> forwards directly to upstream backhaul topic
 	forwardedChan := make(chan []byte, 10)
-	bus.Subscribe(ctx, "sec/tier1/drone/blue/alpha/telemetry", func(key string, payload []byte) {
+	bus.Subscribe(ctx, "upstream/sec/tier1/drone/blue/alpha/telemetry", func(key string, payload []byte) {
 		forwardedChan <- payload
 	})
 

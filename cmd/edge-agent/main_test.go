@@ -55,12 +55,12 @@ func TestVehicleSim_StepDynamics(t *testing.T) {
 		t.Errorf("expected RTB state, got %s", telemRTB.State)
 	}
 
-	// Advance simulation until landed
-	for i := 0; i < 20; i++ {
-		telemRTB = v.Step(1.0)
+	// Advance simulation through smooth RTB transit until landed
+	for i := 0; i < 100 && telemRTB.State != "LANDED"; i++ {
+		telemRTB = v.Step(2.0)
 	}
 	if telemRTB.State != "LANDED" {
-		t.Errorf("expected vehicle to land after altitude reaches <= 5m, got: %s", telemRTB.State)
+		t.Errorf("expected vehicle to land after approaching base and descending, got: %s", telemRTB.State)
 	}
 }
 

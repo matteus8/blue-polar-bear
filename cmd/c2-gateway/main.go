@@ -119,6 +119,11 @@ func NewGateway(bus zenohutil.Bus, cdsProxyURL string, muleOptional ...*zenohuti
 }
 
 func (g *Gateway) handleTelemetry(key string, payload []byte) {
+	// Discard any upstream or cloud-bound telemetry packets to prevent feedback loops
+	if strings.HasPrefix(key, "upstream/") || strings.HasPrefix(key, "cloud/") {
+		return
+	}
+
 	env, err := zenohutil.ParseJSONEnvelope(payload)
 	if err != nil || env.Telemetry == nil {
 		return
@@ -295,7 +300,7 @@ func (g *Gateway) handleInject(w http.ResponseWriter, r *http.Request) {
 
 	vehicleID := req.TargetVehicle
 	if vehicleID == "" {
-		vehicleID = "blue-alpha"
+		vehicleID = "sim-probe-1"
 	}
 
 	synthTier := req.Tier

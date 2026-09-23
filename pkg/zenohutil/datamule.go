@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 )
@@ -102,7 +103,8 @@ func (dm *DataMule) Ingest(ctx context.Context, topic string, payload []byte) er
 
 	// If backhaul is online and not in simulated DDIL blackout, forward directly
 	if dm.status == BackhaulOnline && !dm.simulatedDDIL && dm.upstreamBus != nil {
-		err := dm.upstreamBus.Publish(ctx, topic, payload)
+		upstreamTopic := formatUpstreamTopic(topic)
+		err := dm.upstreamBus.Publish(ctx, upstreamTopic, payload)
 		if err == nil {
 			dm.syncedTotal++
 			dm.lastSyncTime = time.Now()
@@ -149,7 +151,8 @@ func (dm *DataMule) Flush(ctx context.Context) (int, error) {
 	flushed := 0
 	for _, pkt := range dm.buffer {
 		if dm.upstreamBus != nil {
-			if err := dm.upstreamBus.Publish(ctx, pkt.Topic, pkt.Payload); err != nil {
+			upstreamTopic := formatUpstreamTopic(pkt.Topic)
+			if err := dm.upstreamBus.Publish(ctx, upstreamTopic, pkt.Payload); err != nil {
 				log.Printf("[DATA MULE] Failed to flush packet %s: %v", pkt.ID, err)
 				return flushed, err
 			}
@@ -229,3 +232,13 @@ func (dm *DataMule) Close() error {
 	}
 	return nil
 }
+
+// formatUpstreamTopic ensures packets forwarded to cloud backhaul are prefixed with upstream/
+// to prevent circular loops or duplicate ingestion on local tactical mesh subscribers.
+func formatUpstreamTopic(topic string) string {
+	if strings.HasPrefix(topic, "upstream/") {
+		return topic
+	}
+	return "upstream/" + topic
+}
+

@@ -603,7 +603,8 @@ select:focus {
 }
 
 .vehicle-marker {
-  transition: transform 0.45s ease-out;
+  transition: transform 0.55s linear;
+  will-change: transform;
 }
 
 .canvas-fallback {
