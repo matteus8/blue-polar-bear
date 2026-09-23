@@ -235,18 +235,33 @@
     const t = env.telemetry;
     const vID = t.vehicle_id;
     const existing = state.fleet[vID];
+
+    // Monotonic sequence freshness guard:
+    // Drop replayed or out-of-order packets (e.g., historical packets during mule reconnect)
+    // so vehicle markers don't jump backward or jitter.
+    if (existing && existing.telemetry) {
+      const isStale = t.sequence <= existing.telemetry.sequence;
+      // Allow sequence reset if vehicle hasn't been heard from for >10s (agent restart)
+      const isRestart = (existing.telemetry.sequence - t.sequence > 50) && ((Date.now() - (existing.lastUpdate || 0)) > 10000);
+      if (isStale && !isRestart) {
+        return;
+      }
+    }
+
     const prevTeam = existing ? existing.telemetry.team : null;
 
     if (!existing) {
       state.fleet[vID] = {
         telemetry: t,
         header: env.header,
-        tracks: []
+        tracks: [],
+        lastUpdate: Date.now()
       };
       updateCommandVehicleDropdown();
     } else {
       existing.telemetry = t;
       existing.header = env.header;
+      existing.lastUpdate = Date.now();
       if (prevTeam !== t.team) {
         updateCommandVehicleDropdown();
       }
@@ -680,7 +695,7 @@
         body: JSON.stringify({
           tier: tier,
           tamper: tamper,
-          target_vehicle: "blue-alpha"
+          target_vehicle: "sim-probe-1"
         })
       });
 
