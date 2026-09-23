@@ -215,14 +215,24 @@ func (g *Gateway) handleCommand(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Friendly C2 dispatch is restricted to friendly blue fleet assets
-	isBlueTarget := strings.HasPrefix(req.TargetVehicle, "blue-") ||
-		req.TargetVehicle == "alpha" || req.TargetVehicle == "bravo" ||
-		req.TargetVehicle == "charlie" || req.TargetVehicle == "delta" ||
-		req.TargetVehicle == "echo"
+	g.fleetMu.RLock()
+	st, inFleet := g.fleet[req.TargetVehicle]
+	g.fleetMu.RUnlock()
 
-	if !isBlueTarget {
-		http.Error(w, fmt.Sprintf("unauthorized target vehicle: %s (C2 dispatch restricted to friendly blue fleet)", req.TargetVehicle), http.StatusForbidden)
-		return
+	if inFleet {
+		if st.Telemetry.Team != "blue" {
+			http.Error(w, fmt.Sprintf("unauthorized target vehicle: %s (C2 dispatch restricted to friendly blue fleet)", req.TargetVehicle), http.StatusForbidden)
+			return
+		}
+	} else {
+		isBlueTarget := strings.HasPrefix(req.TargetVehicle, "blue-") ||
+			req.TargetVehicle == "alpha" || req.TargetVehicle == "bravo" ||
+			req.TargetVehicle == "charlie" || req.TargetVehicle == "delta" ||
+			req.TargetVehicle == "echo"
+		if !isBlueTarget || strings.HasPrefix(req.TargetVehicle, "red-") {
+			http.Error(w, fmt.Sprintf("unauthorized target vehicle: %s (C2 dispatch restricted to friendly blue fleet)", req.TargetVehicle), http.StatusForbidden)
+			return
+		}
 	}
 
 	cmdPayload := schema.CommandPayload{
@@ -375,8 +385,7 @@ func (g *Gateway) handleDLQ(w http.ResponseWriter, r *http.Request) {
 	client := &http.Client{Timeout: 3 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
-		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode([]any{})
+		http.Error(w, fmt.Sprintf("CDS Guard unavailable: %v", err), http.StatusServiceUnavailable)
 		return
 	}
 	defer resp.Body.Close()

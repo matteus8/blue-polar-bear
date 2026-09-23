@@ -309,7 +309,7 @@ func TestGateway_TargetVehicleAuthorization(t *testing.T) {
 
 	gw := NewGateway(bus, "http://127.0.0.1:8081", nil)
 
-	// 1. Attempt command to adversary red drone -> must return 403 Forbidden
+	// 1. Attempt command to adversary red drone (unregistered) -> must return 403 Forbidden
 	body := []byte(`{"target_vehicle":"red-1","command_type":"RETURN_TO_BASE","parameters":{}}`)
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/command", bytes.NewReader(body))
 	w := httptest.NewRecorder()
@@ -319,7 +319,7 @@ func TestGateway_TargetVehicleAuthorization(t *testing.T) {
 		t.Errorf("expected 403 Forbidden for red-1 target, got %d", w.Code)
 	}
 
-	// 2. Command to valid blue drone -> must succeed (200 OK)
+	// 2. Command to valid blue drone (unregistered fallback) -> must succeed (200 OK)
 	body = []byte(`{"target_vehicle":"blue-bravo","command_type":"PATROL","parameters":{}}`)
 	req = httptest.NewRequest(http.MethodPost, "/api/v1/command", bytes.NewReader(body))
 	w = httptest.NewRecorder()
@@ -327,6 +327,36 @@ func TestGateway_TargetVehicleAuthorization(t *testing.T) {
 
 	if w.Code != http.StatusOK {
 		t.Errorf("expected 200 OK for blue-bravo target, got %d", w.Code)
+	}
+
+	// 3. Register vehicle in fleet with adversary red team -> must reject with 403 Forbidden even if name trick
+	gw.fleetMu.Lock()
+	gw.fleet["adversary-infiltrator"] = &VehicleState{
+		Telemetry: schema.TelemetryPayload{VehicleID: "adversary-infiltrator", Team: "red"},
+	}
+	// Also register a blue vehicle
+	gw.fleet["custom-scout"] = &VehicleState{
+		Telemetry: schema.TelemetryPayload{VehicleID: "custom-scout", Team: "blue"},
+	}
+	gw.fleetMu.Unlock()
+
+	body = []byte(`{"target_vehicle":"adversary-infiltrator","command_type":"PATROL","parameters":{}}`)
+	req = httptest.NewRequest(http.MethodPost, "/api/v1/command", bytes.NewReader(body))
+	w = httptest.NewRecorder()
+	gw.handleCommand(w, req)
+
+	if w.Code != http.StatusForbidden {
+		t.Errorf("expected 403 Forbidden for registered red team asset, got %d", w.Code)
+	}
+
+	// 4. Command to registered blue team vehicle -> must succeed (200 OK)
+	body = []byte(`{"target_vehicle":"custom-scout","command_type":"PATROL","parameters":{}}`)
+	req = httptest.NewRequest(http.MethodPost, "/api/v1/command", bytes.NewReader(body))
+	w = httptest.NewRecorder()
+	gw.handleCommand(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200 OK for registered blue asset, got %d", w.Code)
 	}
 }
 
@@ -440,17 +470,27 @@ func TestGateway_DLQProxy(t *testing.T) {
 		t.Errorf("expected response to contain DLQ-1, got: %s", w.Body.String())
 	}
 
-	// 3. Fallback when CDS guard is unreachable
+	// 3. Fallback when CDS proxy URL is unconfigured
+	gwUnconfigured := NewGateway(bus, "", nil)
+	req = httptest.NewRequest(http.MethodGet, "/api/v1/dlq", nil)
+	w = httptest.NewRecorder()
+	gwUnconfigured.handleDLQ(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200 OK fallback for unconfigured CDS proxy, got %d", w.Code)
+	}
+	if strings.TrimSpace(w.Body.String()) != "[]" {
+		t.Errorf("expected empty array [] on unconfigured CDS proxy, got: %s", w.Body.String())
+	}
+
+	// 4. Configured CDS guard is unreachable -> returns 503 Service Unavailable
 	gwOffline := NewGateway(bus, "http://127.0.0.1:59999", nil)
 	req = httptest.NewRequest(http.MethodGet, "/api/v1/dlq", nil)
 	w = httptest.NewRecorder()
 	gwOffline.handleDLQ(w, req)
 
-	if w.Code != http.StatusOK {
-		t.Errorf("expected 200 OK fallback from DLQ proxy, got %d", w.Code)
-	}
-	if strings.TrimSpace(w.Body.String()) != "[]" {
-		t.Errorf("expected empty array [] on CDS offline, got: %s", w.Body.String())
+	if w.Code != http.StatusServiceUnavailable {
+		t.Errorf("expected 503 Service Unavailable when CDS is offline, got %d", w.Code)
 	}
 }
 

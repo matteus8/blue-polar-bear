@@ -234,8 +234,10 @@
   function handleIncomingTelemetry(env) {
     const t = env.telemetry;
     const vID = t.vehicle_id;
+    const existing = state.fleet[vID];
+    const prevTeam = existing ? existing.telemetry.team : null;
 
-    if (!state.fleet[vID]) {
+    if (!existing) {
       state.fleet[vID] = {
         telemetry: t,
         header: env.header,
@@ -243,8 +245,11 @@
       };
       updateCommandVehicleDropdown();
     } else {
-      state.fleet[vID].telemetry = t;
-      state.fleet[vID].header = env.header;
+      existing.telemetry = t;
+      existing.header = env.header;
+      if (prevTeam !== t.team) {
+        updateCommandVehicleDropdown();
+      }
     }
 
     // Dynamic Enclave Header & HUD Synchronization
@@ -374,7 +379,12 @@
     if (!cmdVehicleSelect) return;
     const currentVal = cmdVehicleSelect.value;
     const blueVehicles = Object.values(state.fleet).filter(v => v.telemetry && v.telemetry.team === "blue");
-    if (blueVehicles.length === 0) return;
+    if (blueVehicles.length === 0) {
+      cmdVehicleSelect.innerHTML = `<option value="">No friendly assets available</option>`;
+      cmdVehicleSelect.disabled = true;
+      return;
+    }
+    cmdVehicleSelect.disabled = false;
 
     cmdVehicleSelect.innerHTML = blueVehicles.map(v => {
       const t = v.telemetry;
@@ -438,7 +448,7 @@
       const lowBattBadge = isLowBatt ? `<span class="badge badge-low-battery">LOW BATT (${t.battery_pct.toFixed(0)}%)</span>` : "";
 
       return `
-        <div class="fleet-card ${teamClass} ${lowBattClass}" data-vehicle-id="${t.vehicle_id}">
+        <div class="fleet-card ${teamClass} ${lowBattClass}" data-vehicle-id="${t.vehicle_id}" role="button" tabindex="0" aria-label="Select and inspect ${t.vehicle_id.toUpperCase()}">
           <div class="fleet-card-header">
             <div style="display:flex; align-items:center; gap:6px;">
               <span class="${callsignClass}">${t.vehicle_id.toUpperCase()}</span>
@@ -465,20 +475,27 @@
       `;
     }).join("");
 
-    // Enable interactive selection and map focusing upon clicking a fleet card
-    fleetListEl.querySelectorAll(".fleet-card").forEach(card => {
-      card.addEventListener("click", () => {
-        const vID = card.dataset.vehicleId;
-        if (!vID || !state.fleet[vID]) return;
-        const v = state.fleet[vID];
-        if (state.map) {
-          state.map.setView([v.telemetry.coordinates.lat, v.telemetry.coordinates.lon], 14, { animate: true });
-          if (state.markers[vID]) {
-            state.markers[vID].openPopup();
-          }
+    // Enable interactive selection and map focusing upon clicking or pressing Enter/Space on a fleet card
+    function selectVehicleCard(vID) {
+      if (!vID || !state.fleet[vID]) return;
+      const v = state.fleet[vID];
+      if (state.map) {
+        state.map.setView([v.telemetry.coordinates.lat, v.telemetry.coordinates.lon], 14, { animate: true });
+        if (state.markers[vID]) {
+          state.markers[vID].openPopup();
         }
-        if (v.telemetry.team === "blue" && cmdVehicleSelect) {
-          cmdVehicleSelect.value = vID;
+      }
+      if (v.telemetry.team === "blue" && cmdVehicleSelect) {
+        cmdVehicleSelect.value = vID;
+      }
+    }
+
+    fleetListEl.querySelectorAll(".fleet-card").forEach(card => {
+      card.addEventListener("click", () => selectVehicleCard(card.dataset.vehicleId));
+      card.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          selectVehicleCard(card.dataset.vehicleId);
         }
       });
     });
@@ -554,6 +571,13 @@
         if (records && records.length > 0) {
           renderDLQTable(records);
         }
+      } else if (resp.status === 503) {
+        if (dlqBodyEl && !dlqBodyEl.querySelector(".dlq-status-offline")) {
+          const existingRows = dlqBodyEl.querySelectorAll("tr:not(.empty-cell)");
+          if (existingRows.length === 0) {
+            dlqBodyEl.innerHTML = `<tr><td colspan="7" class="empty-cell dlq-status-offline" style="color:var(--status-amber);">CDS Guard offline or unreachable (503 Service Unavailable).</td></tr>`;
+          }
+        }
       }
     } catch (e) {
       // CDS HTTP might be on another port or host in test mode
@@ -609,14 +633,22 @@
         })
       });
 
-      const data = await resp.json();
-      if (resp.ok) {
-        cmdFeedbackEl.textContent = `SUCCESS: Dispatched ${cmdType} to ${vehicle.toUpperCase()}`;
-        cmdFeedbackEl.style.color = "var(--status-green)";
-      } else {
-        cmdFeedbackEl.textContent = `FAILED: ${data.error || "Unknown error"}`;
+      if (!resp.ok) {
+        let errText = "Unknown error";
+        try {
+          const data = await resp.json();
+          errText = data.error || data.message || JSON.stringify(data);
+        } catch {
+          errText = await resp.text();
+        }
+        cmdFeedbackEl.textContent = `FAILED: ${errText}`;
         cmdFeedbackEl.style.color = "var(--status-red)";
+        return;
       }
+
+      const data = await resp.json();
+      cmdFeedbackEl.textContent = `SUCCESS: Dispatched ${cmdType} to ${vehicle.toUpperCase()}`;
+      cmdFeedbackEl.style.color = "var(--status-green)";
     } catch (err) {
       cmdFeedbackEl.textContent = `NETWORK ERROR: ${err.message}`;
       cmdFeedbackEl.style.color = "var(--status-red)";
@@ -662,9 +694,15 @@
         }
         setTimeout(pollDLQNow, 300);
       } else {
-        const data = await resp.json().catch(() => ({}));
+        let errText = "Injection failed";
+        try {
+          const data = await resp.json();
+          errText = data.error || data.message || JSON.stringify(data);
+        } catch {
+          errText = await resp.text();
+        }
         if (injectorFeedbackEl) {
-          injectorFeedbackEl.textContent = `FAILED: ${data.error || "Injection failed"}`;
+          injectorFeedbackEl.textContent = `FAILED: ${errText}`;
           injectorFeedbackEl.style.color = "var(--status-red)";
         }
       }
