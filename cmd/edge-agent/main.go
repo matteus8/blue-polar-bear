@@ -33,7 +33,9 @@ type VehicleSim struct {
 	currentLat  float64
 	currentLon  float64
 	currentAlt  float64
+	cruiseAlt   float64
 	speedMps    float64
+	cruiseSpeed float64
 	headingDeg  float64
 	flightAngle float64
 	orbitRadius float64
@@ -67,7 +69,9 @@ func NewVehicleSim(id, vType, team string, lat, lon float64, alt, radius, speed 
 		currentLat:  startLat,
 		currentLon:  startLon,
 		currentAlt:  alt,
+		cruiseAlt:   alt,
 		speedMps:    speed,
+		cruiseSpeed: speed,
 		headingDeg:  90.0,
 		flightAngle: 0.0,
 		orbitRadius: radius,
@@ -90,18 +94,120 @@ func (v *VehicleSim) Step(dt float64) schema.TelemetryPayload {
 	// State-dependent behavior
 	switch v.state {
 	case "AIRBORNE", "PATROL":
-		v.flightAngle += 0.08 * dt
-		if v.flightAngle > 2*math.Pi {
-			v.flightAngle -= 2 * math.Pi
+		// Compute vector from patrol orbit center to current position
+		dLatCenter := v.currentLat - v.centerLat
+		dLonCenter := v.currentLon - v.centerLon
+
+		// Calculate closest entry point on the circular patrol orbit perimeter
+		angleFromCenter := math.Atan2(dLatCenter, dLonCenter)
+		targetLat := roundFloat(v.centerLat+v.orbitRadius*math.Sin(angleFromCenter), 6)
+		targetLon := roundFloat(v.centerLon+v.orbitRadius*math.Cos(angleFromCenter), 6)
+
+		dLatToTarget := targetLat - v.currentLat
+		dLonToTarget := targetLon - v.currentLon
+		distToTargetDeg := math.Sqrt(dLatToTarget*dLatToTarget + dLonToTarget*dLonToTarget)
+		distToTargetM := distToTargetDeg * 111139.0
+
+		// If displaced from patrol orbit, smoothly take off and glide to entry waypoint
+		if distToTargetM > math.Max(8.0, v.speedMps*dt) {
+			bearingRad := math.Atan2(dLonToTarget, dLatToTarget)
+			v.headingDeg = roundFloat(math.Mod((bearingRad*180/math.Pi)+360, 360), 1)
+
+			// Gradual vertical climb to cruise altitude
+			targetAlt := v.cruiseAlt
+			if targetAlt <= 0.0 {
+				targetAlt = 100.0
+			}
+			climbRate := 10.0 // m/s
+			var vz float64 = 0.0
+			if v.currentAlt < targetAlt {
+				v.currentAlt = roundFloat(math.Min(targetAlt, v.currentAlt+(climbRate*dt)), 1)
+				vz = climbRate
+			}
+
+			// Smooth forward acceleration towards cruise speed
+			targetSpeed := v.cruiseSpeed
+			if targetSpeed <= 0.0 {
+				targetSpeed = 14.5
+			}
+			if v.speedMps < targetSpeed {
+				v.speedMps = roundFloat(math.Min(targetSpeed, v.speedMps+(4.0*dt)), 2)
+			}
+
+			// Advance position along bearing towards orbit entry point
+			stepDeg := (v.speedMps * dt) / 111139.0
+			if stepDeg >= distToTargetDeg {
+				v.currentLat = targetLat
+				v.currentLon = targetLon
+				v.flightAngle = angleFromCenter
+			} else {
+				v.currentLat = roundFloat(v.currentLat+stepDeg*math.Cos(bearingRad), 6)
+				v.currentLon = roundFloat(v.currentLon+stepDeg*math.Sin(bearingRad), 6)
+			}
+
+			v.batteryPct = roundFloat(math.Max(5.0, v.batteryPct-(0.04*dt)), 1)
+			vx := roundFloat(v.speedMps*math.Sin(bearingRad), 2)
+			vy := roundFloat(v.speedMps*math.Cos(bearingRad), 2)
+
+			effectiveState := "TRANSIT"
+			if v.currentAlt < 20.0 {
+				effectiveState = "TAKEOFF"
+			}
+
+			return schema.TelemetryPayload{
+				VehicleID:   v.id,
+				VehicleType: v.vehicleType,
+				Team:        v.team,
+				State:       effectiveState,
+				BatteryPct:  v.batteryPct,
+				Coordinates: schema.Coordinates{
+					Latitude:  v.currentLat,
+					Longitude: v.currentLon,
+					AltitudeM: roundFloat(v.currentAlt, 1),
+				},
+				Velocity: schema.Velocity{
+					SpeedMps: roundFloat(v.speedMps, 2),
+					VX:       vx,
+					VY:       vy,
+					VZ:       roundFloat(vz, 2),
+				},
+				HeadingDeg: v.headingDeg,
+				MissionPayload: map[string]any{
+					"payload_mode":      "TACTICAL_RECON",
+					"target_tracking":   true,
+					"ew_emitter_active": v.ewActive,
+					"sensor_temp_c":     38.5,
+				},
+				Sequence: v.sequence,
+			}
 		}
+
+		// On patrol orbit perimeter: synchronize flight angle and execute continuous circular patrol
+		// Physically derive angular velocity from cruise speed: omega = v / R
+		angularSpeed := 0.08
+		orbitRadiusM := v.orbitRadius * 111139.0
+		if orbitRadiusM > 0.0 && v.speedMps > 0.0 {
+			angularSpeed = v.speedMps / orbitRadiusM
+		}
+		v.flightAngle = angleFromCenter + (angularSpeed * dt)
+		if v.flightAngle > 2*math.Pi {
+			v.flightAngle = math.Mod(v.flightAngle, 2*math.Pi)
+		}
+		if v.flightAngle < 0 {
+			v.flightAngle += 2 * math.Pi
+		}
+
 		// Calculate circular orbit around center
 		v.currentLat = roundFloat(v.centerLat+v.orbitRadius*math.Sin(v.flightAngle), 6)
 		v.currentLon = roundFloat(v.centerLon+v.orbitRadius*math.Cos(v.flightAngle), 6)
-		v.headingDeg = roundFloat(math.Mod((v.flightAngle*180/math.Pi)+90, 360), 1)
+
+		// Tangent bearing and velocity along orbit path
+		tangentRad := math.Atan2(-math.Sin(v.flightAngle), math.Cos(v.flightAngle))
+		v.headingDeg = roundFloat(math.Mod((tangentRad*180/math.Pi)+360, 360), 1)
 		v.batteryPct = roundFloat(math.Max(5.0, v.batteryPct-(0.04*dt)), 1)
 		alt := roundFloat(v.currentAlt+5.0*math.Sin(v.flightAngle*2), 2)
-		vx := roundFloat(v.speedMps*math.Cos(v.headingDeg*math.Pi/180), 2)
-		vy := roundFloat(v.speedMps*math.Sin(v.headingDeg*math.Pi/180), 2)
+		vx := roundFloat(v.speedMps*math.Sin(tangentRad), 2)
+		vy := roundFloat(v.speedMps*math.Cos(tangentRad), 2)
 
 		return schema.TelemetryPayload{
 			VehicleID:   v.id,
@@ -209,6 +315,8 @@ func (v *VehicleSim) Step(dt float64) schema.TelemetryPayload {
 		if v.currentAlt <= 5.0 {
 			v.state = "LANDED"
 			v.currentAlt = 0.0
+			v.currentLat = v.baseLat
+			v.currentLon = v.baseLon
 		}
 
 		return schema.TelemetryPayload{
@@ -226,6 +334,26 @@ func (v *VehicleSim) Step(dt float64) schema.TelemetryPayload {
 				SpeedMps: 0.0,
 				VZ:       -2.0,
 			},
+			HeadingDeg: v.headingDeg,
+			Sequence:   v.sequence,
+		}
+
+	case "LANDED":
+		// Grounded on recovery pad
+		v.currentAlt = 0.0
+		v.speedMps = 0.0
+		return schema.TelemetryPayload{
+			VehicleID:   v.id,
+			VehicleType: v.vehicleType,
+			Team:        v.team,
+			State:       "LANDED",
+			BatteryPct:  v.batteryPct,
+			Coordinates: schema.Coordinates{
+				Latitude:  v.currentLat,
+				Longitude: v.currentLon,
+				AltitudeM: 0.0,
+			},
+			Velocity:   schema.Velocity{SpeedMps: 0.0},
 			HeadingDeg: v.headingDeg,
 			Sequence:   v.sequence,
 		}
@@ -281,14 +409,15 @@ func (v *VehicleSim) HandleCommand(cmd schema.CommandPayload) {
 		v.speedMps = 0.0
 	case "PATROL":
 		v.state = "PATROL"
-		v.speedMps = 14.5
-		if v.currentAlt < 30.0 {
-			v.currentAlt = 100.0
+		if v.cruiseSpeed <= 0.0 {
+			v.cruiseSpeed = 14.5
 		}
-		// Synchronize flight angle with current position relative to center
-		dLat := v.currentLat - v.centerLat
-		dLon := v.currentLon - v.centerLon
-		v.flightAngle = math.Atan2(dLat, dLon)
+		// If resuming from landed/stationary, keep speed at 0 for initial liftoff acceleration
+		if v.currentAlt <= 5.0 || v.speedMps <= 0.0 {
+			v.speedMps = 0.0
+		} else {
+			v.speedMps = v.cruiseSpeed
+		}
 	case "ARM":
 		if v.state == "LANDED" {
 			v.state = "AIRBORNE"

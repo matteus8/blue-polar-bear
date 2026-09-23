@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"math"
 	"sync"
 	"testing"
 	"time"
@@ -61,6 +62,67 @@ func TestVehicleSim_StepDynamics(t *testing.T) {
 	}
 	if telemRTB.State != "LANDED" {
 		t.Errorf("expected vehicle to land after approaching base and descending, got: %s", telemRTB.State)
+	}
+}
+
+func TestVehicleSim_ResumePatrolFromBase(t *testing.T) {
+	v := NewVehicleSim("alpha", "drone", "blue", 31.625, -8.080, 100.0, 0.008, 14.5)
+	v.SetBase(31.6120, -8.0850)
+
+	// Command Return-To-Base and advance until landed
+	v.HandleCommand(schema.CommandPayload{CommandType: "RETURN_TO_BASE"})
+	telem := v.Step(1.0)
+	for i := 0; i < 200 && telem.State != "LANDED"; i++ {
+		telem = v.Step(2.0)
+	}
+	if telem.State != "LANDED" {
+		t.Fatalf("expected drone to land at base pad, got state: %s", telem.State)
+	}
+	if telem.Coordinates.AltitudeM != 0.0 {
+		t.Fatalf("expected altitude 0.0 on recovery pad, got %f", telem.Coordinates.AltitudeM)
+	}
+
+	// Command Resume Patrol
+	v.HandleCommand(schema.CommandPayload{CommandType: "PATROL"})
+
+	// Step 1: Initial liftoff from pad
+	telemLiftoff := v.Step(1.0)
+	if telemLiftoff.State != "TAKEOFF" {
+		t.Errorf("expected TAKEOFF state during initial pad ascent, got: %s", telemLiftoff.State)
+	}
+	// Altitude must have climbed gradually, not snapped to 100m
+	if telemLiftoff.Coordinates.AltitudeM <= 0.0 || telemLiftoff.Coordinates.AltitudeM > 25.0 {
+		t.Errorf("expected gradual altitude climb on takeoff, got: %f", telemLiftoff.Coordinates.AltitudeM)
+	}
+	// Coordinates must be near base pad, NOT snapped 1.5km away to patrol orbit!
+	distFromPadDeg := math.Hypot(telemLiftoff.Coordinates.Latitude-31.6120, telemLiftoff.Coordinates.Longitude-(-8.0850))
+	if distFromPadDeg*111139.0 > 50.0 {
+		t.Errorf("expected vehicle to remain near pad on initial liftoff, moved %f meters", distFromPadDeg*111139.0)
+	}
+
+	// Step through climb and forward transit
+	telemTransit := v.Step(3.0)
+	if telemTransit.State != "TRANSIT" {
+		t.Errorf("expected TRANSIT state once airborne and cruising, got: %s", telemTransit.State)
+	}
+
+	// Advance until patrol orbit is reached
+	for i := 0; i < 200 && telemTransit.State != "PATROL"; i++ {
+		prevLat := telemTransit.Coordinates.Latitude
+		prevLon := telemTransit.Coordinates.Longitude
+		telemTransit = v.Step(1.0)
+		// Ensure no instant coordinate snapping across ticks (< 30 meters per 1s tick)
+		tickDistDeg := math.Hypot(telemTransit.Coordinates.Latitude-prevLat, telemTransit.Coordinates.Longitude-prevLon)
+		if tickDistDeg*111139.0 > 30.0 {
+			t.Fatalf("instant snapping detected during transit: jumped %f meters in 1 second", tickDistDeg*111139.0)
+		}
+	}
+
+	if telemTransit.State != "PATROL" {
+		t.Fatalf("expected vehicle to smoothly join PATROL orbit, got state: %s", telemTransit.State)
+	}
+	if telemTransit.Coordinates.AltitudeM < 95.0 {
+		t.Errorf("expected cruise altitude around 100m in patrol, got %f", telemTransit.Coordinates.AltitudeM)
 	}
 }
 

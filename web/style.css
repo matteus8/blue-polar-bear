@@ -705,6 +705,27 @@ select:focus {
   color: #A0AEC0;
 }
 
+/* Takeoff & Transit State: Cyan Ingress Accent Ring */
+.marker-container.state-takeoff .marker-dot,
+.marker-container.state-transit .marker-dot {
+  box-shadow: 0 0 0 2px #FFFFFF, 0 0 0 5px #00E5FF, 0 0 10px rgba(0, 229, 255, 0.8);
+  animation: transit-pulse 1.5s infinite ease-in-out;
+}
+
+.marker-container.state-takeoff .marker-label .marker-sub,
+.marker-container.state-transit .marker-label .marker-sub {
+  color: #00E5FF;
+}
+
+@keyframes transit-pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 2px #FFFFFF, 0 0 0 5px #00E5FF, 0 0 10px rgba(0, 229, 255, 0.8);
+  }
+  50% {
+    box-shadow: 0 0 0 2px #FFFFFF, 0 0 0 7px #00E5FF, 0 0 15px rgba(0, 229, 255, 1);
+  }
+}
+
 .canvas-fallback {
   display: none;
   width: 100%;

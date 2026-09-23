@@ -333,6 +333,8 @@
     let stateClass = "";
     if (t.state === "RTB") stateClass = "state-rtb";
     else if (t.state === "LANDED") stateClass = "state-landed";
+    else if (t.state === "TAKEOFF") stateClass = "state-takeoff";
+    else if (t.state === "TRANSIT") stateClass = "state-transit";
 
     const shortID = t.vehicle_id.replace("blue-", "B-").replace("red-", "R-").toUpperCase();
     const markerHTML = `
@@ -376,12 +378,14 @@
       ? `<span style="color:#BA4540; font-weight:700;">${t.battery_pct.toFixed(1)}% [CRITICAL LOW]</span>`
       : `${t.battery_pct.toFixed(1)}%`;
 
+    const stateColor = (t.state === "RTB") ? "#D9822B" : (t.state === "TAKEOFF" || t.state === "TRANSIT") ? "#00E5FF" : color;
+
     state.markers[vID].bindPopup(`
       <div style="font-family: -apple-system, BlinkMacSystemFont, sans-serif; color: #2B2621; font-size: 12px; line-height: 1.5; padding: 2px;">
         <div style="font-weight: 700; color: ${color}; font-size: 13px; margin-bottom: 3px;">
           ${t.vehicle_id.toUpperCase()} <span style="font-size: 11px; font-weight: 600; color: #968D82;">(${t.team.toUpperCase()} TEAM)</span>
         </div>
-        <div><strong>State:</strong> <span style="font-weight:700; color:${t.state === 'RTB' ? '#D9822B' : color};">${t.state}</span></div>
+        <div><strong>State:</strong> <span style="font-weight:700; color:${stateColor};">${t.state}</span></div>
         <div><strong>Altitude:</strong> ${t.coordinates.alt_m.toFixed(1)}m | <strong>Speed:</strong> ${t.velocity.speed_mps.toFixed(1)}m/s</div>
         <div><strong>Battery:</strong> ${battDisplay}</div>
         <div style="font-family: monospace; font-size: 11px; color: #6E655C; margin-top: 3px;">
