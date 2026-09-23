@@ -347,6 +347,12 @@ body {
   box-shadow: 0 2px 6px rgba(0,0,0,0.06);
 }
 
+.fleet-card.selected-card {
+  border-color: #00E5FF !important;
+  box-shadow: 0 0 0 2px rgba(0, 229, 255, 0.4), 0 4px 12px rgba(0, 0, 0, 0.12) !important;
+  background-color: rgba(0, 229, 255, 0.05) !important;
+}
+
 .fleet-card-header {
   display: flex;
   justify-content: space-between;
@@ -605,6 +611,98 @@ select:focus {
 .vehicle-marker {
   transition: transform 0.55s linear;
   will-change: transform;
+}
+
+.marker-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  transform: translate(-50%, -50%);
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.marker-dot {
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  border: 2px solid #FFFFFF;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.4);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.marker-label {
+  margin-top: 3px;
+  padding: 1px 5px;
+  background: rgba(20, 24, 30, 0.88);
+  backdrop-filter: blur(4px);
+  color: #FFFFFF;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 700;
+  border-radius: 3px;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+  pointer-events: none;
+}
+
+.marker-label .marker-sub {
+  color: #00E5FF;
+  font-weight: 600;
+  margin-left: 2px;
+}
+
+/* Selected Tactical Target Reticle */
+.marker-container.selected-target .marker-dot {
+  transform: scale(1.25);
+  box-shadow: 0 0 0 3px #FFFFFF, 0 0 0 6px #00E5FF, 0 0 14px rgba(0, 229, 255, 0.9);
+  animation: target-reticle-pulse 1.8s infinite ease-in-out;
+}
+
+.marker-container.selected-target .marker-label {
+  border-color: #00E5FF;
+  box-shadow: 0 0 8px rgba(0, 229, 255, 0.6);
+}
+
+@keyframes target-reticle-pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 3px #FFFFFF, 0 0 0 6px #00E5FF, 0 0 14px rgba(0, 229, 255, 0.9);
+  }
+  50% {
+    box-shadow: 0 0 0 3px #FFFFFF, 0 0 0 8px #00E5FF, 0 0 20px rgba(0, 229, 255, 1);
+  }
+}
+
+/* RTB State: Amber Warning Transit Ring */
+.marker-container.state-rtb .marker-dot {
+  box-shadow: 0 0 0 2px #FFFFFF, 0 0 0 5px #D9822B, 0 0 10px rgba(217, 130, 43, 0.8);
+  animation: rtb-pulse 1.4s infinite ease-in-out;
+}
+
+.marker-container.state-rtb .marker-label .marker-sub {
+  color: #D9822B;
+}
+
+@keyframes rtb-pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 2px #FFFFFF, 0 0 0 5px #D9822B, 0 0 10px rgba(217, 130, 43, 0.8);
+  }
+  50% {
+    box-shadow: 0 0 0 2px #FFFFFF, 0 0 0 7px #D9822B, 0 0 15px rgba(217, 130, 43, 1);
+  }
+}
+
+/* Landed State: Dedicated Recovery Pad Base Marker */
+.marker-container.state-landed .marker-dot {
+  border-radius: 3px;
+  background-color: #4A5568 !important;
+  box-shadow: 0 0 0 2px #FFFFFF, 0 0 0 4px #718096;
+}
+
+.marker-container.state-landed .marker-label .marker-sub {
+  color: #A0AEC0;
 }
 
 .canvas-fallback {

@@ -28,9 +28,9 @@ func TestMatchesSelector(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		result := matchesSelector(tt.selector, tt.key)
+		result := MatchesSelector(tt.selector, tt.key)
 		if result != tt.expected {
-			t.Errorf("matchesSelector(%q, %q) = %v, expected %v", tt.selector, tt.key, result, tt.expected)
+			t.Errorf("MatchesSelector(%q, %q) = %v, expected %v", tt.selector, tt.key, result, tt.expected)
 		}
 	}
 }
