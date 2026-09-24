@@ -502,26 +502,28 @@
       const isSelected = state.selectedVehicleId === t.vehicle_id;
       const selectedClass = isSelected ? "selected-card" : "";
 
+      const stateBadgeColor = isRed ? "var(--fleet-red)" : "var(--fleet-blue)";
+
       return `
         <div class="fleet-card ${teamClass} ${lowBattClass} ${selectedClass}" data-vehicle-id="${t.vehicle_id}" role="button" tabindex="0" aria-label="Select and inspect ${t.vehicle_id.toUpperCase()}">
           <div class="fleet-card-header">
-            <div style="display:flex; align-items:center; gap:6px;">
+            <div style="display:flex; align-items:center; gap:5px;">
               <span class="${callsignClass}">${t.vehicle_id.toUpperCase()}</span>
+              <span class="badge" style="font-size:0.58rem; padding:0px 4px; background:rgba(0,0,0,0.06); color:${stateBadgeColor}; border:1px solid currentColor;">${t.state}</span>
               ${lowBattBadge}
             </div>
-            <span class="vehicle-meta">${t.team.toUpperCase()} TEAM // ${t.vehicle_type}</span>
+            <div style="display:flex; align-items:center; gap:6px;">
+              <span style="color:${batColor}; font-weight:700; font-family:var(--font-mono); font-size:0.7rem;">${t.battery_pct.toFixed(0)}%</span>
+              <span class="vehicle-meta">${t.team.toUpperCase()}</span>
+            </div>
           </div>
           <div class="telemetry-row">
-            <span>STATE: ${t.state}</span>
             <span>ALT: ${t.coordinates.alt_m.toFixed(0)}m</span>
-          </div>
-          <div class="telemetry-row">
-            <span>LAT: ${t.coordinates.lat.toFixed(4)}</span>
-            <span>LON: ${t.coordinates.lon.toFixed(4)}</span>
-          </div>
-          <div class="telemetry-row">
-            <span>TIER: ${h.classification.replace("TIER-", "T")}</span>
             <span>SPD: ${t.velocity.speed_mps.toFixed(1)}m/s</span>
+            <span>${h.classification.replace("TIER-", "T")}</span>
+          </div>
+          <div class="telemetry-row" style="color:var(--text-muted); font-size:0.65rem;">
+            <span>${t.coordinates.lat.toFixed(4)}, ${t.coordinates.lon.toFixed(4)}</span>
           </div>
           <div class="battery-bar">
             <div class="battery-fill" style="width: ${t.battery_pct}%; background-color: ${batColor};"></div>
