@@ -241,4 +241,3 @@ func formatUpstreamTopic(topic string) string {
 	}
 	return "upstream/" + topic
 }
-

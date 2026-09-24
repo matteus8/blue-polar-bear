@@ -493,4 +493,3 @@ func TestGateway_DLQProxy(t *testing.T) {
 		t.Errorf("expected 503 Service Unavailable when CDS is offline, got %d", w.Code)
 	}
 }
-
