@@ -31,6 +31,8 @@ build:
 	go build -o $(BIN_DIR)/c2-gateway ./cmd/c2-gateway
 	@echo "==> Compiling cmd/edge-agent..."
 	go build -o $(BIN_DIR)/edge-agent ./cmd/edge-agent
+	@echo "==> Compiling cmd/bench-check..."
+	go build -o $(BIN_DIR)/bench-check ./cmd/bench-check
 	@echo "==> All binaries successfully compiled to $(BIN_DIR)/"
 
 ## cross-build: Cross-compile static Linux ARM64 and AMD64 binaries for drone fleet flashing
@@ -40,10 +42,12 @@ cross-build:
 	GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o $(BIN_DIR)/linux_arm64/edge-agent ./cmd/edge-agent
 	GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o $(BIN_DIR)/linux_arm64/cds-guard ./cmd/cds-guard
 	GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o $(BIN_DIR)/linux_arm64/c2-gateway ./cmd/c2-gateway
+	GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o $(BIN_DIR)/linux_arm64/bench-check ./cmd/bench-check
 	@echo "==> Cross-compiling for Linux AMD64 (GCS / x86)..."
 	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o $(BIN_DIR)/linux_amd64/edge-agent ./cmd/edge-agent
 	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o $(BIN_DIR)/linux_amd64/cds-guard ./cmd/cds-guard
 	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o $(BIN_DIR)/linux_amd64/c2-gateway ./cmd/c2-gateway
+	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o $(BIN_DIR)/linux_amd64/bench-check ./cmd/bench-check
 	@echo "==> Multi-arch fleet binaries compiled to $(BIN_DIR)/"
 
 ## lint: Check Go code formatting and style

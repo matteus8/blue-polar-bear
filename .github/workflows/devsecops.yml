@@ -118,9 +118,10 @@ jobs:
           go build -trimpath -ldflags="-s -w" -o dist/edge-agent ./cmd/edge-agent
           go build -trimpath -ldflags="-s -w" -o dist/cds-guard ./cmd/cds-guard
           go build -trimpath -ldflags="-s -w" -o dist/c2-gateway ./cmd/c2-gateway
+          go build -trimpath -ldflags="-s -w" -o dist/bench-check ./cmd/bench-check
 
           ARCHIVE_NAME="blue-polar-bear_${VERSION}_${TARGET_NAME}.tar.gz"
-          tar -czf "${ARCHIVE_NAME}" -C dist edge-agent cds-guard c2-gateway
+          tar -czf "${ARCHIVE_NAME}" -C dist edge-agent cds-guard c2-gateway bench-check
           sha256sum "${ARCHIVE_NAME}" > "${ARCHIVE_NAME}.sha256"
 
           ls -lh *.tar.gz *.sha256

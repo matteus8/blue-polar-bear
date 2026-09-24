@@ -1,0 +1,14 @@
+# /etc/default/edge-agent
+# Blue Polar Bear: Tactical Edge Agent Environment Configuration
+# Deployed to Raspberry Pi 5 / Companion Single-Board Computers
+
+DRONE_ID=blue-alpha
+DRONE_TEAM=blue
+DRONE_TYPE=drone
+ZENOH_ROUTER_URL=tcp/192.168.1.1:7447
+TELEMETRY_RATE_HZ=1.0
+
+# Flight Controller MAVLink Interconnect (TELEM2 UART @ 921600 baud)
+MAVLINK_ENABLED=true
+MAVLINK_SERIAL_PORT=/dev/ttyAMA0
+MAVLINK_BAUD=921600

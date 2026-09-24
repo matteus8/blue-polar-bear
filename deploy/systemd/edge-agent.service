@@ -1,0 +1,35 @@
+[Unit]
+Description=Blue Polar Bear Tactical Edge Drone Agent
+Documentation=https://github.com/matteus8/blue-polar-bear
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+Group=dialout
+WorkingDirectory=/opt/blue-polar-bear
+EnvironmentFile=-/etc/default/edge-agent
+ExecStart=/opt/blue-polar-bear/bin/edge-agent \
+    -id ${DRONE_ID:-blue-alpha} \
+    -team ${DRONE_TEAM:-blue} \
+    -type ${DRONE_TYPE:-drone} \
+    -router ${ZENOH_ROUTER_URL:-tcp/127.0.0.1:7447} \
+    -rate ${TELEMETRY_RATE_HZ:-1.0} \
+    -mavlink=${MAVLINK_ENABLED:-true} \
+    -mavlink-serial=${MAVLINK_SERIAL_PORT:-/dev/ttyAMA0} \
+    -mavlink-baud=${MAVLINK_BAUD:-921600}
+
+Restart=always
+RestartSec=3s
+TimeoutStopSec=10s
+
+# Hardening & Zero-Bloat Limits
+LimitNOFILE=65536
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=bp-edge-agent
+
+[Install]
+WantedBy=multi-user.target

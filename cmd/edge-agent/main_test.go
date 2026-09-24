@@ -323,3 +323,29 @@ func TestEdgeAgent_MAVLinkBridgeIntegration(t *testing.T) {
 	}
 }
 
+func TestRunMavlinkInstance_SerialFailSafe(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	bus := zenohutil.NewMemoryBus()
+	defer bus.Close()
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+
+	// Attempting to open a non-existent serial port should log an error and exit gracefully without panic
+	go runMavlinkInstance(ctx, "bravo", "blue", "drone", ":0", "/dev/nonexistent_test_port_12345", 115200, bus, &wg)
+
+	done := make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		// Exited gracefully as expected
+	case <-time.After(1 * time.Second):
+		t.Fatal("runMavlinkInstance did not exit gracefully on invalid serial port")
+	}
+}

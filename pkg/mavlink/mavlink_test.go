@@ -21,10 +21,10 @@ func TestCRC_Calculation(t *testing.T) {
 func TestHeartbeat_EncodeDecode(t *testing.T) {
 	hb := &Heartbeat{
 		CustomMode:     12345,
-		Type:           2,  // Quadrotor
-		Autopilot:      12, // PX4
+		Type:           2,           // Quadrotor
+		Autopilot:      12,          // PX4
 		BaseMode:       0x80 | 0x01, // Armed
-		SystemStatus:   4,  // Active
+		SystemStatus:   4,           // Active
 		MavlinkVersion: 3,
 	}
 
@@ -46,14 +46,14 @@ func TestHeartbeat_EncodeDecode(t *testing.T) {
 func TestGlobalPositionInt_EncodeDecode(t *testing.T) {
 	pos := &GlobalPositionInt{
 		TimeBootMs:  50000,
-		Lat:         316500000,  // 31.65 deg N
-		Lon:         -80100000,  // -8.01 deg W
-		Alt:         150000,     // 150m MSL
-		RelativeAlt: 25000,      // 25m AGL
-		Vx:          1200,       // 12 m/s North
-		Vy:          500,        // 5 m/s East
+		Lat:         316500000, // 31.65 deg N
+		Lon:         -80100000, // -8.01 deg W
+		Alt:         150000,    // 150m MSL
+		RelativeAlt: 25000,     // 25m AGL
+		Vx:          1200,      // 12 m/s North
+		Vy:          500,       // 5 m/s East
 		Vz:          0,
-		Hdg:         18050,      // 180.5 deg
+		Hdg:         18050, // 180.5 deg
 	}
 
 	payload := EncodeGlobalPositionInt(pos)

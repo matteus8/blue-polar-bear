@@ -494,8 +494,8 @@ func runDroneInstance(ctx context.Context, sim *VehicleSim, bus zenohutil.Bus, r
 	}
 }
 
-// runMavlinkInstance executes the MAVLink UDP ingestion loop and command listener.
-func runMavlinkInstance(ctx context.Context, unitID, team, vType, udpAddr string, bus zenohutil.Bus, wg *sync.WaitGroup) {
+// runMavlinkInstance executes the MAVLink telemetry bridge and command dispatcher over Serial or UDP.
+func runMavlinkInstance(ctx context.Context, unitID, team, vType, udpAddr, serialPort string, baud int, bus zenohutil.Bus, wg *sync.WaitGroup) {
 	defer wg.Done()
 
 	vState := mavlink.NewVehicleState(unitID, team, vType, schema.Tier2Restricted, 1)
@@ -503,24 +503,42 @@ func runMavlinkInstance(ctx context.Context, unitID, team, vType, udpAddr string
 	telemTopic := zenohutil.BuildKey("tier2", vType, team, unitID, "telemetry")
 	cmdTopic := zenohutil.BuildKey("tier2", vType, team, unitID, "command")
 
-	udpClient, err := mavlink.NewUDPClient(udpAddr, vState, func(env *schema.SecurityEnvelope) {
+	telemCb := func(env *schema.SecurityEnvelope) {
 		data, err := json.Marshal(env)
 		if err != nil {
 			return
 		}
 		_ = bus.Publish(ctx, telemTopic, data)
-	})
-	if err != nil {
-		log.Printf("[EDGE MAVLINK %s] Failed to bind UDP listener on %s: %v", unitID, udpAddr, err)
-		return
 	}
-	defer udpClient.Close()
 
-	udpClient.Start(1 * time.Second)
-	log.Printf("[EDGE MAVLINK %s] Listening for PX4 SITL MAVLink packets on %s -> Publishing to %s", unitID, udpAddr, telemTopic)
+	var client mavlink.AutopilotClient
+
+	if serialPort != "" {
+		sp, err := mavlink.OpenSerialPort(serialPort, baud)
+		if err != nil {
+			log.Printf("[EDGE MAVLINK %s] Failed to open serial port %s at %d baud: %v", unitID, serialPort, baud, err)
+			return
+		}
+		defer sp.Close()
+
+		streamClient := mavlink.NewStreamClient(sp, vState, telemCb)
+		client = streamClient
+		log.Printf("[EDGE MAVLINK %s] Connected to Flight Controller via Serial %s @ %d baud -> Publishing to %s", unitID, serialPort, baud, telemTopic)
+	} else {
+		udpClient, err := mavlink.NewUDPClient(udpAddr, vState, telemCb)
+		if err != nil {
+			log.Printf("[EDGE MAVLINK %s] Failed to bind UDP listener on %s: %v", unitID, udpAddr, err)
+			return
+		}
+		defer udpClient.Close()
+		client = udpClient
+		log.Printf("[EDGE MAVLINK %s] Listening for PX4 SITL MAVLink packets on %s -> Publishing to %s", unitID, udpAddr, telemTopic)
+	}
+
+	client.Start(1 * time.Second)
 
 	// Subscribe to Zenoh C2 commands and relay to MAVLink
-	err = bus.Subscribe(ctx, cmdTopic, func(key string, payload []byte) {
+	err := bus.Subscribe(ctx, cmdTopic, func(key string, payload []byte) {
 		if !zenohutil.MatchesSelector(cmdTopic, key) {
 			return
 		}
@@ -532,13 +550,13 @@ func runMavlinkInstance(ctx context.Context, unitID, team, vType, udpAddr string
 		log.Printf("[EDGE MAVLINK %s] Relaying Zenoh C2 Command %s to Autopilot via MAVLink", unitID, cmd.CommandType)
 		switch cmd.CommandType {
 		case "RETURN_TO_BASE":
-			_ = udpClient.ReturnToLaunch()
+			_ = client.ReturnToLaunch()
 		case "ARM":
-			_ = udpClient.SetArmed(true)
+			_ = client.SetArmed(true)
 		case "DISARM":
-			_ = udpClient.SetArmed(false)
+			_ = client.SetArmed(false)
 		case "HOVER":
-			_ = udpClient.SendCommandLong(mavlink.MavCmdDoSetMode, 4, 3, 0, 0, 0, 0, 0)
+			_ = client.SendCommandLong(mavlink.MavCmdDoSetMode, 4, 3, 0, 0, 0, 0, 0)
 		}
 	})
 	if err != nil {
@@ -551,8 +569,10 @@ func runMavlinkInstance(ctx context.Context, unitID, team, vType, udpAddr string
 
 func main() {
 	swarmMode := flag.Bool("swarm", false, "Run multi-drone swarm simulation (5 Blue, 5 Red drones)")
-	mavlinkMode := flag.Bool("mavlink", false, "Ingest telemetry from PX4 / ArduPilot SITL via MAVLink over UDP")
-	mavlinkUDP := flag.String("mavlink-addr", ":14550", "UDP listening address for MAVLink stream")
+	mavlinkMode := flag.Bool("mavlink", false, "Ingest telemetry from PX4 / ArduPilot SITL via MAVLink over UDP or physical Serial/UART")
+	mavlinkUDP := flag.String("mavlink-addr", ":14550", "UDP listening address for MAVLink SITL stream")
+	mavlinkSerial := flag.String("mavlink-serial", "", "Serial/UART port device path (e.g. /dev/ttyACM0 or /dev/tty.usbmodem1) for physical flight controller")
+	mavlinkBaud := flag.Int("mavlink-baud", 115200, "Serial port baud rate (e.g. 57600, 115200, 921600)")
 	blueCount := flag.Int("blue-count", 5, "Number of Blue team drones in swarm")
 	redCount := flag.Int("red-count", 5, "Number of Red team drones in swarm")
 	singleID := flag.String("id", "bravo", "Single vehicle callsign/ID (used when swarm=false)")
@@ -581,10 +601,14 @@ func main() {
 
 	if *mavlinkMode {
 		log.Printf("=================================================================")
-		log.Printf(" LAUNCHING MAVLINK AUTOPILOT BRIDGE: [%s/%s/%s] UDP: %s", *singleType, *singleTeam, *singleID, *mavlinkUDP)
+		if *mavlinkSerial != "" {
+			log.Printf(" LAUNCHING MAVLINK AUTOPILOT BRIDGE (HITL SERIAL): [%s/%s/%s] Port: %s @ %d baud", *singleType, *singleTeam, *singleID, *mavlinkSerial, *mavlinkBaud)
+		} else {
+			log.Printf(" LAUNCHING MAVLINK AUTOPILOT BRIDGE (SITL UDP): [%s/%s/%s] UDP: %s", *singleType, *singleTeam, *singleID, *mavlinkUDP)
+		}
 		log.Printf("=================================================================")
 		wg.Add(1)
-		go runMavlinkInstance(ctx, *singleID, *singleTeam, *singleType, *mavlinkUDP, bus, &wg)
+		go runMavlinkInstance(ctx, *singleID, *singleTeam, *singleType, *mavlinkUDP, *mavlinkSerial, *mavlinkBaud, bus, &wg)
 	} else if *swarmMode {
 		log.Printf("=================================================================")
 		log.Printf(" LAUNCHING TACTICAL SWARM SIMULATOR: %d BLUE DRONES | %d RED DRONES", *blueCount, *redCount)

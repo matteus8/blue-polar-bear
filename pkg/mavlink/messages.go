@@ -28,10 +28,10 @@ const (
 
 // Common MAVLink Commands (MAV_CMD)
 const (
-	MavCmdNavReturnToLaunch uint16 = 20
-	MavCmdNavLand           uint16 = 21
-	MavCmdNavTakeoff        uint16 = 22
-	MavCmdDoSetMode         uint16 = 176
+	MavCmdNavReturnToLaunch  uint16 = 20
+	MavCmdNavLand            uint16 = 21
+	MavCmdNavTakeoff         uint16 = 22
+	MavCmdDoSetMode          uint16 = 176
 	MavCmdComponentArmDisarm uint16 = 400
 )
 
@@ -344,6 +344,19 @@ func DecodeAttitude(payload []byte) (*Attitude, error) {
 		PitchSpeed: math.Float32frombits(binary.LittleEndian.Uint32(payload[20:24])),
 		YawSpeed:   math.Float32frombits(binary.LittleEndian.Uint32(payload[24:28])),
 	}, nil
+}
+
+// EncodeAttitude packs an Attitude into payload bytes.
+func EncodeAttitude(a *Attitude) []byte {
+	buf := make([]byte, 28)
+	binary.LittleEndian.PutUint32(buf[0:4], a.TimeBootMs)
+	binary.LittleEndian.PutUint32(buf[4:8], math.Float32bits(a.Roll))
+	binary.LittleEndian.PutUint32(buf[8:12], math.Float32bits(a.Pitch))
+	binary.LittleEndian.PutUint32(buf[12:16], math.Float32bits(a.Yaw))
+	binary.LittleEndian.PutUint32(buf[16:20], math.Float32bits(a.RollSpeed))
+	binary.LittleEndian.PutUint32(buf[20:24], math.Float32bits(a.PitchSpeed))
+	binary.LittleEndian.PutUint32(buf[24:28], math.Float32bits(a.YawSpeed))
+	return buf
 }
 
 // EncodeCommandLong packs a CommandLong message.
