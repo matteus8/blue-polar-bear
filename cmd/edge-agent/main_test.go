@@ -4,10 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"math"
+	"net"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/mcamacho/edgeCompute/pkg/mavlink"
 	"github.com/mcamacho/edgeCompute/pkg/schema"
 	"github.com/mcamacho/edgeCompute/pkg/zenohutil"
 )
@@ -220,3 +222,104 @@ func TestVehicleSim_PubSubIntegration(t *testing.T) {
 	cancel()
 	wg.Wait()
 }
+
+func TestEdgeAgent_MAVLinkBridgeIntegration(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	bus := zenohutil.NewMemoryBus()
+	defer bus.Close()
+
+	vState := mavlink.NewVehicleState("alpha", "blue", "drone", schema.Tier2Restricted, 1)
+
+	telemReceived := make(chan []byte, 10)
+	telemTopic := zenohutil.BuildKey("tier2", "drone", "blue", "alpha", "telemetry")
+	_ = bus.Subscribe(ctx, telemTopic, func(key string, payload []byte) {
+		telemReceived <- payload
+	})
+
+	udpClient, err := mavlink.NewUDPClient("127.0.0.1:0", vState, func(env *schema.SecurityEnvelope) {
+		data, err := json.Marshal(env)
+		if err == nil {
+			_ = bus.Publish(ctx, telemTopic, data)
+		}
+	})
+	if err != nil {
+		t.Fatalf("failed to bind udp listener: %v", err)
+	}
+	defer udpClient.Close()
+	udpClient.Start(50 * time.Millisecond)
+
+	// Send MAVLink packets from simulated SITL socket
+	sitlConn, err := net.Dial("udp", udpClient.LocalAddr())
+	if err != nil {
+		t.Fatalf("failed to dial udp: %v", err)
+	}
+	defer sitlConn.Close()
+
+	pos := &mavlink.GlobalPositionInt{
+		Lat:         316500000,
+		Lon:         -80100000,
+		RelativeAlt: 20000, // 20m
+		Vx:          1200,  // 12 m/s
+		Hdg:         18000,
+	}
+	pkt, _ := mavlink.EncodeFrame(1, 1, 1, mavlink.MsgIDGlobalPositionInt, mavlink.EncodeGlobalPositionInt(pos))
+	_, err = sitlConn.Write(pkt)
+	if err != nil {
+		t.Fatalf("failed to write to sitl socket: %v", err)
+	}
+
+	select {
+	case data := <-telemReceived:
+		env, err := zenohutil.ParseJSONEnvelope(data)
+		if err != nil {
+			t.Fatalf("failed to parse json envelope: %v", err)
+		}
+		if env.Telemetry.VehicleID != "alpha" {
+			t.Errorf("expected vehicle alpha, got %s", env.Telemetry.VehicleID)
+		}
+		if env.Telemetry.Coordinates.AltitudeM != 20.0 {
+			t.Errorf("expected alt 20.0m, got %f", env.Telemetry.Coordinates.AltitudeM)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for mavlink telemetry via zenoh bus")
+	}
+
+	// Test C2 command delivery to SITL
+	cmdTopic := zenohutil.BuildKey("tier2", "drone", "blue", "alpha", "command")
+	_ = bus.Subscribe(ctx, cmdTopic, func(key string, payload []byte) {
+		env, err := zenohutil.ParseJSONEnvelope(payload)
+		if err != nil || env.Command == nil {
+			return
+		}
+		if env.Command.CommandType == "RETURN_TO_BASE" {
+			_ = udpClient.ReturnToLaunch()
+		}
+	})
+
+	cmdEnv, _ := schema.NewCommandEnvelope(schema.Tier2Restricted, "test-gcs", schema.CommandPayload{
+		CommandID:     "rtl-cmd-1",
+		TargetVehicle: "alpha",
+		CommandType:   "RETURN_TO_BASE",
+	}, nil)
+	cmdBytes, _ := json.Marshal(cmdEnv)
+	_ = bus.Publish(ctx, cmdTopic, cmdBytes)
+
+	// Read RTL command on SITL socket
+	buf := make([]byte, 1024)
+	_ = sitlConn.SetReadDeadline(time.Now().Add(1 * time.Second))
+	n, err := sitlConn.Read(buf)
+	if err != nil {
+		t.Fatalf("failed to read rtl command on sitl socket: %v", err)
+	}
+
+	frame, err := mavlink.DecodeFrame(buf[:n])
+	if err != nil {
+		t.Fatalf("failed to decode command frame: %v", err)
+	}
+	if frame.MessageID != mavlink.MsgIDCommandLong {
+		t.Fatalf("expected MsgIDCommandLong, got %d", frame.MessageID)
+	}
+}
+

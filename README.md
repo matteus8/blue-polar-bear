@@ -25,6 +25,7 @@ Explore the core components of the system:
   * [`cmd/cds-guard`](cmd/cds-guard/) — Zero-trust Cross Domain Solution guard with fail-closed egress, coordinate coarsening, and Dead Letter Queue auditing.
   * [`cmd/c2-gateway`](cmd/c2-gateway/) — Ingress bridge translating Zenoh mesh topics into standard WebSockets and REST APIs.
 * [`pkg/`](pkg/) — Core domain logic and shared libraries:
+  * [`pkg/mavlink`](pkg/mavlink/) — Pure Go MAVLink v2 protocol codec, UDP client, and SITL autopilot bridge.
   * [`pkg/schema`](pkg/schema/) — Canonical data envelopes, SHA-256 integrity verification, and command types.
   * [`pkg/policy`](pkg/policy/) — Security tiers, coordinate sanitization rules, and DLQ audit logging.
   * [`pkg/zenohutil`](pkg/zenohutil/) — Tactical Data Mule disk spooler, Zenoh session helpers, and REST client.
