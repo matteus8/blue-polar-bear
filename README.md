@@ -1,6 +1,6 @@
 # Blue Polar Bear: Tactical Edge-to-Cloud C2 & Telemetry Mesh
 
-[![Release](https://img.shields.io/badge/Release-v0.7.1-blue.svg)](https://github.com/matteus8/blue-polar-bear/releases/tag/v0.7.1)
+[![Release](https://img.shields.io/badge/Release-v0.8.0-blue.svg)](https://github.com/matteus8/blue-polar-bear/releases/tag/v0.8.0)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Protocol: Eclipse Zenoh](https://img.shields.io/badge/Protocol-Eclipse_Zenoh_1.1.0-orange.svg)](https://zenoh.io/)
 [![Stack: Go](https://img.shields.io/badge/Language-Go_1.22+-00ADD8.svg)](https://go.dev/)
@@ -21,11 +21,12 @@ The platform bridges tactical RF communications to modern web dashboards. It com
 Explore the core components of the system:
 
 * [`cmd/`](cmd/) — Production Go microservices:
-  * [`cmd/edge-agent`](cmd/edge-agent/) — 10-drone swarm telemetry simulator (5 Blue friendly, 5 Red adversary) with physics and C2 listeners.
+  * [`cmd/edge-agent`](cmd/edge-agent/) — 10-drone swarm telemetry simulator (5 Blue friendly, 5 Red adversary) with physics, C2 listeners, and MAVLink bridge.
+  * [`cmd/bench-check`](cmd/bench-check/) — Standalone desk HITL avionics sniffer and real-time telemetry HUD.
   * [`cmd/cds-guard`](cmd/cds-guard/) — Zero-trust Cross Domain Solution guard with fail-closed egress, coordinate coarsening, and Dead Letter Queue auditing.
   * [`cmd/c2-gateway`](cmd/c2-gateway/) — Ingress bridge translating Zenoh mesh topics into standard WebSockets and REST APIs.
 * [`pkg/`](pkg/) — Core domain logic and shared libraries:
-  * [`pkg/mavlink`](pkg/mavlink/) — Pure Go MAVLink v2 protocol codec, UDP client, and SITL autopilot bridge.
+  * [`pkg/mavlink`](pkg/mavlink/) — Pure Go MAVLink v2 protocol codec, serial/UART termios driver, stream framer, and SITL/HITL autopilot bridge.
   * [`pkg/schema`](pkg/schema/) — Canonical data envelopes, SHA-256 integrity verification, and command types.
   * [`pkg/policy`](pkg/policy/) — Security tiers, coordinate sanitization rules, and DLQ audit logging.
   * [`pkg/zenohutil`](pkg/zenohutil/) — Tactical Data Mule disk spooler, Zenoh session helpers, and REST client.
