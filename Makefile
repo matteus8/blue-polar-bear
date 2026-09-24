@@ -1,4 +1,4 @@
-.PHONY: all help test test-race build clean fmt lint up down restart logs status
+.PHONY: all help test test-race build cross-build clean fmt lint up down restart logs status
 
 # Default target
 all: test build
@@ -32,6 +32,19 @@ build:
 	@echo "==> Compiling cmd/edge-agent..."
 	go build -o $(BIN_DIR)/edge-agent ./cmd/edge-agent
 	@echo "==> All binaries successfully compiled to $(BIN_DIR)/"
+
+## cross-build: Cross-compile static Linux ARM64 and AMD64 binaries for drone fleet flashing
+cross-build:
+	@mkdir -p $(BIN_DIR)/linux_arm64 $(BIN_DIR)/linux_amd64
+	@echo "==> Cross-compiling for Linux ARM64 (Raspberry Pi 5 / Jetson)..."
+	GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o $(BIN_DIR)/linux_arm64/edge-agent ./cmd/edge-agent
+	GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o $(BIN_DIR)/linux_arm64/cds-guard ./cmd/cds-guard
+	GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o $(BIN_DIR)/linux_arm64/c2-gateway ./cmd/c2-gateway
+	@echo "==> Cross-compiling for Linux AMD64 (GCS / x86)..."
+	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o $(BIN_DIR)/linux_amd64/edge-agent ./cmd/edge-agent
+	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o $(BIN_DIR)/linux_amd64/cds-guard ./cmd/cds-guard
+	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o $(BIN_DIR)/linux_amd64/c2-gateway ./cmd/c2-gateway
+	@echo "==> Multi-arch fleet binaries compiled to $(BIN_DIR)/"
 
 ## lint: Check Go code formatting and style
 lint:
