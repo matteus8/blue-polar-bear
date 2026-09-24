@@ -108,7 +108,8 @@ jobs:
         run: |
           mkdir -p dist
           VERSION="${{ github.ref_name }}"
-          if [ -z "$VERSION" ] || [ "$VERSION" = "main" ]; then
+          VERSION=$(echo "$VERSION" | tr '/' '-')
+          if [ -z "$VERSION" ] || [ "$VERSION" = "main" ] || [[ "$VERSION" == *"merge"* ]]; then
             VERSION="$(git rev-parse --short HEAD)"
           fi
           TARGET_NAME="${{ matrix.target.os }}_${{ matrix.target.arch }}"
