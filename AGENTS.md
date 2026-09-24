@@ -123,3 +123,25 @@ docker compose down
 
 - Follow conventional commits: `feat:`, `fix:`, `docs:`, `refactor:`, `test:`, `sec:`.
 - Ensure `.gitignore` prevents virtual environments and binaries from being committed.
+
+---
+
+## 8. Physical Hardware & Autonomy Integration Roadmap
+
+When transitioning from swarm simulation to physical hardware, agents must adhere to the 4-phase benchtop-to-flight progression:
+
+1. **Phase 1: Virtual Avionics (PX4 SITL on UDP `14550`)**
+   - Connect `cmd/edge-agent` to the open-source PX4 Autopilot software simulator via MAVLink (`pkg/mavlink`).
+   - Validate that virtual GPS, battery, and attitude stream into `schema.SecurityEnvelope` without physical hardware.
+2. **Phase 2: Benchtop Flight Controller (Desk Hardware-in-the-Loop)**
+   - Connect `cmd/edge-agent` to a physical Pixhawk 6C / Cube flight controller over USB serial (`/dev/tty.usbmodem1` on macOS or `/dev/ttyACM0` on Linux) at 115200/921600 baud.
+   - Verify real physical IMU/accelerometer orientation and MAVLink command response on the bench with propellers removed.
+3. **Phase 3: Companion Single-Board Computer (Raspberry Pi 5 ARM64)**
+   - Cross-compile `edge-agent` for Linux ARM64 (`GOOS=linux GOARCH=arm64`).
+   - Wire the Pi 5 to the Pixhawk's `TELEM2` port over 4-pin UART serial.
+   - Validate peer-to-peer Zenoh mesh connectivity over Wi-Fi/tactical RF to the GCS laptop.
+4. **Phase 4: Full Airframe Integration & Flight Testing**
+   - Mount the tested avionics deck onto an NDAA-compliant developer frame (Holybro X500 V2).
+   - Equip DroneCAN Remote ID broadcast module and register under FAA DroneZone.
+   - Execute controlled autonomous flight tests under FAA Part 107 / TRUST guidelines.
+

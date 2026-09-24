@@ -159,7 +159,20 @@ The system simulates a live tactical scenario centered in Morocco (`31.6500° N,
 
 ---
 
-## 6. Repository Structure
+## 6. Hardware & Autonomy Roadmap
+
+A phased benchtop-to-flight progression bridges software simulation with physical avionics:
+
+| Phase | Target Hardware & Link | Key Milestone |
+| :--- | :--- | :--- |
+| **Phase 1: Virtual Avionics** | PX4 SITL simulator via UDP (`14550`) | Ingest virtual telemetry into `schema.SecurityEnvelope` with zero hardware cost. |
+| **Phase 2: Benchtop Flight Controller** | Pixhawk 6C / Cube via USB Serial (`/dev/ttyACM0`) | Verify real IMU attitude, orientation, and MAVLink C2 commands on the bench. |
+| **Phase 3: Companion SBC Integration** | Raspberry Pi 5 (ARM64) wired to Pixhawk UART | Cross-compile `edge-agent` and validate peer-to-peer Zenoh mesh routing over RF/Wi-Fi. |
+| **Phase 4: Airframe & Field Flight** | Holybro X500 V2 frame + DroneCAN Remote ID | Execute autonomous flights under FAA Part 107 / TRUST with Starlink Data Mule sync. |
+
+---
+
+## 7. Repository Structure
 
 ```text
 edgeCompute/
@@ -190,7 +203,7 @@ edgeCompute/
 
 ---
 
-## 7. Developer Tooling & Makefile Commands
+## 8. Developer Tooling & Makefile Commands
 
 A unified [`Makefile`](file:///Users/mcamacho/git-repos/edgeCompute/Makefile) provides standard shortcuts for building, testing, and running the stack:
 
@@ -209,7 +222,7 @@ A unified [`Makefile`](file:///Users/mcamacho/git-repos/edgeCompute/Makefile) pr
 
 ---
 
-## 8. Quickstart Execution Guide
+## 9. Quickstart Execution Guide
 
 ### Option A: Local Multi-Container Stack (Recommended)
 Launch the Zenoh router, CDS Guard, C2 Gateway, and 10-drone swarm:
@@ -249,7 +262,7 @@ Each component includes an in-memory mock bus for testing without running a Zeno
 
 ---
 
-## 9. Verification & Automated Testing Playbook
+## 10. Verification & Automated Testing Playbook
 
 The repository maintains 100% race-free test coverage across all microservices and packages:
 
@@ -266,6 +279,6 @@ make test-race
 
 ---
 
-## 10. License
+## 11. License
 
 Licensed under the Apache License, Version 2.0.
