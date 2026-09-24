@@ -74,7 +74,66 @@ jobs:
           bandit -r . -ll -ii || true
 
   # =========================================================================
-  # 2. CONTAINER BUILD, TRIVY SCAN (BLOCK CRITICALS), SYFT SBOM & GHCR PUBLISH
+  # 2. MULTI-ARCH MATRIX COMPILATION & FLASHABLE FLEET ARTIFACTS
+  # =========================================================================
+  cross-compile-binaries:
+    name: Fleet Multi-Arch Build (${{ matrix.target.os }}/${{ matrix.target.arch }})
+    needs: security-audit
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - os: linux
+            arch: arm64 # Raspberry Pi 5, NVIDIA Jetson, Companion Avionics SBCs
+          - os: linux
+            arch: amd64 # Ruggedized Field GCS, Edge Servers, x86 Mission Decks
+          - os: darwin
+            arch: arm64 # Apple Silicon Operator Laptops & Benchtop SITL
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: 'stable'
+          check-latest: true
+
+      - name: Compile and Package Services
+        env:
+          GOOS: ${{ matrix.target.os }}
+          GOARCH: ${{ matrix.target.arch }}
+          CGO_ENABLED: '0'
+        run: |
+          mkdir -p dist
+          VERSION="${{ github.ref_name }}"
+          if [ -z "$VERSION" ] || [ "$VERSION" = "main" ]; then
+            VERSION="$(git rev-parse --short HEAD)"
+          fi
+          TARGET_NAME="${{ matrix.target.os }}_${{ matrix.target.arch }}"
+          echo "==> Cross-compiling static binaries for ${TARGET_NAME} (${VERSION})..."
+
+          go build -trimpath -ldflags="-s -w" -o dist/edge-agent ./cmd/edge-agent
+          go build -trimpath -ldflags="-s -w" -o dist/cds-guard ./cmd/cds-guard
+          go build -trimpath -ldflags="-s -w" -o dist/c2-gateway ./cmd/c2-gateway
+
+          ARCHIVE_NAME="blue-polar-bear_${VERSION}_${TARGET_NAME}.tar.gz"
+          tar -czf "${ARCHIVE_NAME}" -C dist edge-agent cds-guard c2-gateway
+          sha256sum "${ARCHIVE_NAME}" > "${ARCHIVE_NAME}.sha256"
+
+          ls -lh *.tar.gz *.sha256
+
+      - name: Upload Binary Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: binaries-${{ matrix.target.os }}-${{ matrix.target.arch }}
+          path: |
+            *.tar.gz
+            *.sha256
+
+  # =========================================================================
+  # 3. CONTAINER BUILD, TRIVY SCAN (BLOCK CRITICALS), SYFT SBOM & GHCR PUBLISH
   # =========================================================================
   build-scan-publish:
     name: Container Build & Security Scan
@@ -186,11 +245,11 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
 
   # =========================================================================
-  # 3. GITHUB RELEASE CREATION (ON TAG PUSH)
+  # 4. GITHUB RELEASE CREATION (ON TAG PUSH)
   # =========================================================================
   release:
-    name: Publish Release & SBOM Assets
-    needs: build-scan-publish
+    name: Publish Release, Multi-Arch Binaries & SBOMs
+    needs: [build-scan-publish, cross-compile-binaries]
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     steps:
@@ -201,13 +260,23 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           pattern: 'sbom-*'
-          path: release-sboms/
+          path: release-assets/
           merge-multiple: true
 
-      - name: Display Release Assets
+      - name: Download all Binaries
+        uses: actions/download-artifact@v4
+        with:
+          pattern: 'binaries-*'
+          path: release-assets/
+          merge-multiple: true
+
+      - name: Generate Consolidated Checksums
         run: |
-          echo "Release Assets to attach:"
-          ls -lh release-sboms/
+          cd release-assets
+          cat *.sha256 > SHA256SUMS.txt
+          rm -f *.sha256
+          echo "Release Assets ready for publication:"
+          ls -lh
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
@@ -218,6 +287,8 @@ jobs:
           prerelease: false
           generate_release_notes: true
           files: |
-            release-sboms/*.json
+            release-assets/*.tar.gz
+            release-assets/SHA256SUMS.txt
+            release-assets/*.json
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

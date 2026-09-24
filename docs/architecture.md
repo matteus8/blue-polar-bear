@@ -146,3 +146,14 @@ The system simulates a live tactical scenario centered in Morocco (`31.6500° N,
   - Callsigns: `red-1`, `red-2`, `red-3`, `red-4`, `red-5`
   - Clustered in the adversary eastern operating sector.
   - Follow autonomous patrol trajectories and emit adversary mission sensor payloads.
+
+---
+
+## 7. Fleet Scalability & Multi-Arch Flashing Architecture
+
+Blue Polar Bear is engineered to scale from a single 10-drone tactical element to hundreds of airframes with zero architectural rework:
+
+* **Pure Go Binaries (`CGO_ENABLED=0`):** Edge binaries have zero runtime C/C++ or dynamic library dependencies. They compile to self-contained, statically linked executables under 15MB.
+* **Multi-Arch Matrix Pipeline:** Automated CI builds flashable binary packages for `linux/arm64` (Raspberry Pi 5, NVIDIA Jetson Orin, Voxl 2) and `linux/amd64` (x86_64 mission computers and GCS workstations) accompanied by SHA-256 cryptographic verification manifests.
+* **Decentralized O(1) Overhead:** Inter-node pub/sub routing relies on peer-to-peer Eclipse Zenoh mesh protocols. Nodes do not maintain global state or register with centralized databases; adding 100 or 500 airframes simply extends the decentralized key expression tree (`sec/<tier>/<vehicle_type>/<team>/<unit_id>/...`).
+* **Stateless Parameterization:** All drone parameters (callsign, team, recovery pads, MAVLink UDP ports) are injected dynamically via CLI flags or environment variables, allowing identical binaries to be flashed across entire fleets without recompilation.

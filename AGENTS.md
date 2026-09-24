@@ -34,6 +34,11 @@ This document defines the persistent instructions, architectural invariants, cod
    - The CDS Guard must be **Fail-Closed**. Any unparseable, malformed, or policy-violating packet must be quarantined to a Dead Letter Queue (DLQ) with an immutable JSONL audit log.
    - `TIER-3: CRITICAL` packets must NEVER egress beyond the local tactical boundary.
    - `TIER-2: RESTRICTED` packets must be coarsened (GPS rounded to 2 decimal places ~1.1km) and sanitized before being down-tagged to `TIER-1: PUBLIC`.
+6. **Fleet Scalability & Zero-Bloat Edge Invariant (10 to 1,000+ Drones):**
+   - **Zero Edge Bloat:** Software must remain strictly modular, lightweight, and zero-bloat. Never introduce heavyweight runtimes (Node.js, Python, Java) onto edge airframes.
+   - **Pure Go & Multi-Arch Matrix:** All edge binaries must remain 100% pure Go (`CGO_ENABLED=0`) capable of compiling to `linux/arm64` (Raspberry Pi 5 / NVIDIA Jetson) and `linux/amd64` via automated CI matrix without CGo toolchains.
+   - **Stateless Configuration:** Edge agents must be dynamically configurable via CLI flags (`-id`, `-team`, `-mavlink-addr`, `-rate`) or environment variables—never hardcoded arrays or callsign switches.
+   - **Decentralized O(1) Routing:** Inter-node pub/sub overhead must scale $O(1)$ per edge drone using peer-to-peer Eclipse Zenoh mesh routing without central database or message broker bottlenecks. Flashing and provisioning hundreds of airframes must require zero codebase rework.
 
 ---
 
