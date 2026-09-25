@@ -5,7 +5,7 @@ RUN go mod download
 COPY . .
 RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o /bin/edge-agent ./cmd/edge-agent
 
-FROM alpine:3.21
+FROM alpine:3.24
 RUN apk add --no-cache ca-certificates tzdata
 COPY --from=builder /bin/edge-agent /bin/edge-agent
 ENTRYPOINT ["/bin/edge-agent"]
