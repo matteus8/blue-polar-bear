@@ -58,16 +58,19 @@ This document defines the persistent instructions, architectural invariants, cod
 edgeCompute/
 ├── .agents/skills/        # Workspace agent runbooks & skill procedures
 ├── cmd/
-│   ├── edge-agent/        # 10-drone swarm telemetry simulator (5 Blue, 5 Red) (Go)
+│   ├── edge-agent/        # 10-drone swarm telemetry simulator & MAVLink bridge (Go)
+│   ├── bench-check/       # Standalone desk HITL avionics sniffer & terminal HUD (Go)
 │   ├── cds-guard/         # Cross Domain Solution guard & redaction daemon (Go)
 │   └── c2-gateway/        # WebSocket/HTTP server streaming telemetry to web (Go)
 ├── pkg/
+│   ├── mavlink/           # Pure Go MAVLink v2 protocol codec, serial/UART driver, stream framer
 │   ├── schema/            # Canonical data structs (SecurityHeader, TelemetryPayload)
 │   ├── policy/            # CDS redaction, synthetic tiers, and DLQ audit log
 │   └── zenohutil/         # Reusable Zenoh session, topic standards, and REST client
 ├── web/                   # Web-based Tactical C2 Dashboard (HTML5/Canvas/Leaflet)
 ├── configs/               # Zenoh JSON5 configs for Edge, GCS, and Cloud Router
-├── deploy/                # Multi-stage Dockerfiles for containerized services
+├── deploy/                # Dockerfiles and systemd service units for Pi 5 / SBC
+│   └── systemd/           # Automated background daemon templates for Raspberry Pi OS
 ├── compose.yml            # Multi-container tactical mesh orchestration
 ├── go.mod                 # Go module definitions
 └── AGENTS.md              # Multi-agent operating procedures & development rules
@@ -82,10 +85,10 @@ When collaborating with other agents or handling subtasks:
 | Role Name | Scope of Work | Primary Files |
 | :--- | :--- | :--- |
 | **`Agent-DataModel`** | Defines canonical schemas, SHA-256 serialization, and policy types. | `pkg/schema/`, `pkg/policy/` |
-| **`Agent-Edge`** | Implements 10-drone swarm flight physics, battery models, and C2 listeners. | `cmd/edge-agent/`, `configs/zenoh-edge.json5` |
+| **`Agent-Edge`** | Swarm flight dynamics, MAVLink SITL/HITL bridge, and bench sniffer. | `cmd/edge-agent/`, `cmd/bench-check/`, `pkg/mavlink/` |
 | **`Agent-CDS`** | Implements the Zero-Trust CDS Guard (schema validation, redaction, DLQ). | `cmd/cds-guard/`, `pkg/policy/` |
 | **`Agent-C2`** | Implements GCS gateway, WebSocket bridge, REST APIs, and Tactical COP UI. | `cmd/c2-gateway/`, `web/` |
-| **`Agent-Infra`** | Starlink backhaul, Cloudflare tunnels, Dockerfiles, and `compose.yml`. | `deploy/`, `configs/`, `compose.yml` |
+| **`Agent-Infra`** | Starlink backhaul, systemd edge units, Dockerfiles, and `compose.yml`. | `deploy/`, `configs/`, `compose.yml` |
 
 ---
 
@@ -111,10 +114,11 @@ Before marking any task complete, run the relevant verification steps:
 # 1. Verify Go syntax and test coverage
 go test -v ./...
 
-# 2. Verify all Go production binaries compile
+# 2. Verify all Go production and utility binaries compile
 go build -o /dev/null ./cmd/cds-guard
 go build -o /dev/null ./cmd/c2-gateway
 go build -o /dev/null ./cmd/edge-agent
+go build -o /dev/null ./cmd/bench-check
 
 # 3. Test multi-container stack integration
 docker compose up -d --build
@@ -140,10 +144,10 @@ When transitioning from swarm simulation to physical hardware, agents must adher
    - Validate that virtual GPS, battery, and attitude stream into `schema.SecurityEnvelope` without physical hardware.
 2. **Phase 2: Benchtop Flight Controller (Desk Hardware-in-the-Loop)**
    - Connect `cmd/edge-agent` to a physical Pixhawk 6C / Cube flight controller over USB serial (`/dev/tty.usbmodem1` on macOS or `/dev/ttyACM0` on Linux) at 115200/921600 baud.
-   - Verify real physical IMU/accelerometer orientation and MAVLink command response on the bench with propellers removed.
+   - Use `cmd/bench-check` as a standalone **Desk HITL Sniffer & HUD** (Heads-Up Display) to passively decode MAVLink v2 binary streams, compute ITU X.25 CRC-16 checks, and verify live physical IMU pitch/roll/yaw orientation on the desk with propellers removed.
 3. **Phase 3: Companion Single-Board Computer (Raspberry Pi 5 ARM64)**
-   - Cross-compile `edge-agent` for Linux ARM64 (`GOOS=linux GOARCH=arm64`).
-   - Wire the Pi 5 to the Pixhawk's `TELEM2` port over 4-pin UART serial.
+   - Cross-compile `edge-agent` for Linux ARM64 (`GOOS=linux GOARCH=arm64`) and deploy via `deploy/systemd/edge-agent.service`.
+   - Wire the Pi 5 GPIO pins (Pin 8 TXD, Pin 10 RXD, Pin 6 GND) to the Pixhawk's `TELEM2` port over 4-pin UART serial.
    - Validate peer-to-peer Zenoh mesh connectivity over Wi-Fi/tactical RF to the GCS laptop.
 4. **Phase 4: Full Airframe Integration & Flight Testing**
    - Mount the tested avionics deck onto an NDAA-compliant developer frame (Holybro X500 V2).

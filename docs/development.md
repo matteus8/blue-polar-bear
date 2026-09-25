@@ -46,6 +46,15 @@ Each component supports in-memory standalone mode without requiring a local Zeno
    go run cmd/edge-agent/main.go -swarm -blue-count 5 -red-count 5 -mock
    ```
 
+4. **Run Desk HITL Avionics Sniffer & Terminal HUD (`bench-check`):**
+   ```bash
+   # Sniff physical Pixhawk connected via USB or companion UART
+   go run cmd/bench-check/main.go -serial /dev/ttyACM0 -baud 115200
+
+   # Sniff simulated PX4 SITL UDP packets
+   go run cmd/bench-check/main.go -udp :14550
+   ```
+
 ---
 
 ## 2. Developer Tooling & Makefile Targets
@@ -56,7 +65,8 @@ A unified [`Makefile`](file:///Users/mcamacho/git-repos/edgeCompute/Makefile) pr
 | :--- | :--- | :--- |
 | `make test` | Run all Go unit and integration tests | `go test -count=1 -v ./...` |
 | `make test-race` | Run all tests with Go race detector enabled | `go test -count=1 -v -race ./...` |
-| `make build` | Compile all 3 production binaries into `./bin` | Builds `cds-guard`, `c2-gateway`, `edge-agent` |
+| `make build` | Compile all 4 service and sniffer binaries into `./bin` | Builds `cds-guard`, `c2-gateway`, `edge-agent`, `bench-check` |
+| `make cross-build` | Multi-arch static build (`linux/arm64`, `linux/amd64`) | Builds stripped binaries for drone fleet flashing |
 | `make lint` | Check formatting compliance | `gofmt -s -l .` |
 | `make fmt` | Automatically format all Go source code | `gofmt -s -w .` |
 | `make up` | Build & launch multi-container mesh in background | `docker compose up -d --build` |

@@ -78,6 +78,25 @@ This document outlines the 4-phase progression bridging pure software simulation
   ```
 - **Validation:** Validate peer-to-peer Zenoh mesh connectivity over Wi-Fi / tactical RF to the GCS laptop.
 
+---
+
+## 3. Core Avionics Terminology: HITL, Sniffer & HUD
+
+To bridge software and embedded hardware engineering, `cmd/bench-check` implements three foundational concepts:
+
+### 1. HITL (Hardware-in-the-Loop)
+* **SITL (Software-in-the-Loop):** The flight physics, sensor models, and autopilot code all execute as software inside CPU processes (e.g. PX4 SITL over UDP).
+* **HITL (Hardware-in-the-Loop):** The autopilot code runs on **real, physical embedded flight hardware** (such as an STM32H7 processor on a Pixhawk 6C). 
+* **"On Desk" HITL:** The flight controller sits on your office desk connected via USB-C or UART jumper wires with propellers and motors disconnected. Tilting the board with your hand exercises the physical onboard MEMS gyroscopes, accelerometers, and magnetometers, streaming live physical telemetry down to the host computer.
+
+### 2. Sniffer (Protocol Packet Analyzer)
+* A **Sniffer** passively monitors a raw communication channel (such as a serial COM port or network socket) without injecting commands or altering the traffic.
+* `cmd/bench-check` acts as an automated MAVLink v2 protocol analyzer. It captures continuous byte streams, hunts for the `0xFD` framing byte, extracts message IDs, computes ITU X.25 CRC-16 checksums, and tallies packet reception rates and corruption drops.
+
+### 3. HUD (Heads-Up Display)
+* Borrowed from tactical aviation, a **HUD** projects critical spatial orientation and vehicle vitals directly into the operator's line of sight without requiring them to decipher raw hexadecimal logs or launch a browser-based dashboard.
+* In `cmd/bench-check`, the terminal screen is cleared at 2 Hz (`\033[H\033[2J`) to render an ANSI cockpit HUD showing real-time roll/pitch/yaw angles, coordinate lock, battery voltage, and armed state.
+
 ### Phase 4: Full Airframe Integration & Flight Testing
 - **Objective:** Mount the tested avionics deck onto an NDAA-compliant developer frame (Holybro X500 V2).
 - **Hardware Cost:** ~$700 (airframe, motors, ESCs, LiPo battery, and DroneCAN Remote ID).
