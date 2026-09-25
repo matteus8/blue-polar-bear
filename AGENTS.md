@@ -88,7 +88,7 @@ When collaborating with other agents or handling subtasks:
 | **`Agent-Edge`** | Swarm flight dynamics, MAVLink SITL/HITL bridge, and bench sniffer. | `cmd/edge-agent/`, `cmd/bench-check/`, `pkg/mavlink/` |
 | **`Agent-CDS`** | Implements the Zero-Trust CDS Guard (schema validation, redaction, DLQ). | `cmd/cds-guard/`, `pkg/policy/` |
 | **`Agent-C2`** | Implements GCS gateway, WebSocket bridge, REST APIs, and Tactical COP UI. | `cmd/c2-gateway/`, `web/` |
-| **`Agent-Infra`** | Starlink backhaul, systemd edge units, Dockerfiles, and `compose.yml`. | `deploy/`, `configs/`, `compose.yml` |
+| **`Agent-Infra`** | Starlink backhaul, Cloudflare Zero Trust tunnels, AWS cloud relay, systemd units, Dockerfiles, and `compose.yml`. | `deploy/`, `configs/`, `compose.yml` |
 
 ---
 
