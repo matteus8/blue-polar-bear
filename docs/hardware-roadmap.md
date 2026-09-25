@@ -92,3 +92,33 @@ This document outlines the 4-phase progression bridging pure software simulation
 - **AWS Cloud Target:**
   - AWS ECS / EC2 deployment for central Zenoh cloud router (`configs/zenoh-cloud.json5`) and enterprise C2 web dashboard.
   - S3 / DynamoDB sink for permanent mission logs and post-mission flight telemetry replays.
+
+---
+
+## 3. Hardware Bill of Materials (BOM) & Procurement Guide
+
+### What to Buy Now: Phase 2 & 3 Desk Hardware (~$270 – $310 Total)
+
+To validate physical avionics, serial drivers, and companion mesh routing on your desk, procure these core components:
+
+| Item | Component | Est. Cost | Where to Buy / Notes |
+| :--- | :--- | :--- | :--- |
+| **1** | **Holybro Pixhawk 6C Flight Controller** (with PM02 Power Module) | ~$190–$210 | Holybro US Store, Amazon, or GetFPV. NDAA-compliant, dual IMU, USB-C. |
+| **2** | **Raspberry Pi 5 (4GB or 8GB RAM)** | ~$60–$80 | Adafruit, SparkFun, CanaKit, or Amazon. |
+| **3** | **Official Raspberry Pi 27W USB-C Power Supply** | ~$12 | Required for clean 5V 5A power to the Pi 5. |
+| **4** | **Raspberry Pi 5 Active Cooler** (Heatsink + Fan) | ~$5 | Prevents thermal throttling during high-rate telemetry. |
+| **5** | **MicroSD Card (32GB or 64GB SanDisk Extreme / Samsung EVO)** | ~$10–$12 | High endurance for OS and local ring buffers. |
+| **6** | **JST-GH 4-Pin to 0.1" Dupont Female Jumper Cable** | ~$6–$8 | Connects Pixhawk `TELEM2` port to Pi 5 GPIO pins 8/10/6. |
+| **7** | **USB-C to USB-C / USB-A Data Cable** | ~$8 | Must support high-speed data transfer (not charge-only). |
+
+> [!IMPORTANT]
+> **Electrical Safety Notice (3.3V Logic):**
+> Pixhawk 6C telemetry ports (`TELEM1`, `TELEM2`) output **3.3V TTL serial logic**. The Raspberry Pi 5 GPIO header operates strictly at **3.3V logic**. They are 100% directly compatible without voltage level shifters. **Never apply 5V directly to Raspberry Pi GPIO pins.**
+
+### What to Hold Off On (Phase 4 Flight Hardware — Buy Later)
+
+Do **not** purchase flight hardware until Phase 2 & 3 desk tests pass completely:
+* Holybro X500 V2 ARF Drone Frame Kit (~$450–$500)
+* 4S / 6S LiPo Flight Battery (4000–5000mAh) & Balance Charger (~$100)
+* DroneCAN M8N / M9N GPS module with compass (~$50–$70)
+* DroneCAN Remote ID broadcast beacon (~$50–$100)
