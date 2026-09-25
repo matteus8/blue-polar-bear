@@ -5,7 +5,7 @@ RUN go mod download || true
 COPY . .
 RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o /bin/cds-guard ./cmd/cds-guard
 
-FROM alpine:3.21
+FROM alpine:3.24
 RUN apk add --no-cache ca-certificates tzdata
 COPY --from=builder /bin/cds-guard /bin/cds-guard
 VOLUME ["/logs"]
